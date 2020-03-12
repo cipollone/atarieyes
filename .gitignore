@@ -1,0 +1,20 @@
+
+## Linux
+*~
+.fuse_hidden*
+.Trash-*
+.nfs*
+
+## MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+## Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+## Vim
+.*.sw[po]
+Session.vim
