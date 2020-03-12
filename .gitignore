@@ -1,3 +1,6 @@
+## Packaging
+*.egg-info/
+
 
 ## Linux
 *~
