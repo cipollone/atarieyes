@@ -5,11 +5,14 @@
 import argparse
 import gym
 
-from . import trainer
+from atarieyes import training
 
 
 def main():
     """Main function."""
+
+    # Defaults
+    batch = 10
 
     # Parsing arguments
     parser = argparse.ArgumentParser(
@@ -22,6 +25,8 @@ def main():
         "-l", "--list", action="store_true", help="List all environments")
     parser.add_argument(
         "-r", "--render", action="store_true", help="Render while training.")
+    parser.add_argument(
+        "-b", "--batch", type=int, default=batch, help="Training batch size.")
 
     args = parser.parse_args()
 
@@ -30,8 +35,7 @@ def main():
         print(_environment_names())
         return
     else:
-        trainer.Trainer(args).train()
-
+        training.Trainer(args).train()
 
 
 def _environment_names():
