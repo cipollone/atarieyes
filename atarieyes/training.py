@@ -18,10 +18,10 @@ class Trainer:
         :param args: namespace of arguments; see --help.
         """
 
-        # Setup
-        self.model_dir, self.log_dir = "models", "logs"
-        self._prepare_directories((self.model_dir, self.log_dir))
+        # Init
         self.log_frequency = args.logs
+        self.cont = args.cont
+        model_path, log_path = self._prepare_directories(resuming=self.cont)
 
         # Environment
         self.env = gym.make(args.env)
@@ -37,51 +37,77 @@ class Trainer:
         self.model = models.single_frame_model(self.frame_shape)
 
         # Tools
-        self.saver = self.CheckpointSaver(self.model, self.model_dir)
-        self.logger = self.TensorBoardLogger(self.model, self.log_dir)
+        self.saver = self.CheckpointSaver(self.model, model_path)
+        self.logger = self.TensorBoardLogger(self.model, log_path)
 
     def train(self):
         """Train."""
 
-        # Init
-        self.logger.save_graph(self.frame_shape)
-        step = 0
+        # New run
+        if not self.cont:
+            self.logger.save_graph(self.frame_shape)
+            step = 0
+        # Restore
+        else:
+            step = self.saver.load(self.frame_shape)
+            print("> Weights restored.")
+
+            # Initial valuation
+            frames = next(self.dataset_it)
+            outputs = self.model.evaluate(frames, frames)
+            self.logger.save_scalars(step, self.parse_outputs(outputs))
+
+            step += 1
 
         # Training loop
         print("> Training")
         while True:
 
             # Do
-            metrics = self.step()
+            outputs = self.step()
+            metrics = self.parse_outputs(outputs)
 
             # Logs and savings
             if step % self.log_frequency == 0:
 
                 print("Step ", step, ", ", metrics, sep="", end="          \r")
-                self.saver.save(-metrics["loss"])
-                self.logger.save_scalars(metrics, step)
+                self.saver.save(step, -metrics["loss"])
+                self.logger.save_scalars(step, metrics)
 
             step += 1
 
     def step(self):
         """Applies a single training step.
         
-        :return: a dict of losses
+        :return: outputs of the model.
         """
 
         frames = next(self.dataset_it)
-        losses = self.model.train_on_batch(frames, frames)
-        losses = {name: loss for name, loss in
-            zip(self.model.metrics_names, losses)}
-        return losses
+        outputs = self.model.train_on_batch(frames, frames)
+        return outputs
+
+    def parse_outputs(self, values):
+        """Parse outputs to a dict of values.
+
+        :param values: outputs of the model
+        :return: a dict of losses and metrics
+        """
+
+        return {name: loss for name, loss in
+            zip(self.model.metrics_names, values)}
 
     @staticmethod
-    def _prepare_directories(dirs, resuming=False):
+    def _prepare_directories(resuming=False):
         """Prepare the directories where weights and logs are saved.
 
-        :param dirs: sequence of directories to create.
         :param resuming: If True, the directories are not deleted.
+        :return: two paths, respectively for models and logs.
         """
+
+        # Common directories
+        models_path = "models"
+        logs_path = "logs"
+        dirs = (models_path, logs_path)
 
         # Delete old ones
         if not resuming:
@@ -99,6 +125,15 @@ class Trainer:
                     shutil.rmtree(d)
                 os.makedirs(d)
 
+        # Logs alwas use new directories (using increasing numbers)
+        i = 0
+        while os.path.exists(os.path.join(logs_path, str(i))):
+            i += 1
+        log_path = os.path.join(logs_path, str(i))
+        os.mkdir(log_path)
+
+        return (models_path, log_path)
+
     class CheckpointSaver:
         """Save weights and restore."""
 
@@ -109,13 +144,15 @@ class Trainer:
             :param path: directory where checkpoints should be saved.
             """
 
-            self.path = os.path.join(path, model.name)
+            self.save_path = os.path.join(path, model.name)
+            self.counters_path = os.path.join(path, "counters.txt")
             self.model = model
             self.score = float("-inf")
 
-        def save(self, score=None):
+        def save(self, step, score=None):
             """Save.
 
+            :param step: current training step.
             :param score: if provided, only save if score is higher than last
                 saved score. If None, always save.
             :return: True when the model is saved.
@@ -129,8 +166,33 @@ class Trainer:
                     self.score = score
 
             # Save
-            self.model.save_weights(self.path, overwrite=True, save_format="tf")
+            self.model.save_weights(
+                self.save_path, overwrite=True, save_format="tf")
+            with open(self.counters_path, "w") as f:
+                f.write("step: " + str(step))
             return True
+
+        def load(self, input_shape):
+            """Restore weights from the previous checkpoint.
+
+            :param input_shape: shape of the input tensors (without batch).
+                This is used to initialize the optimizer before restoring.
+            :return: the step of the saved weights
+            """
+
+            # Initialize optimizer with a fake train
+            inputs = np.zeros((1, *input_shape), dtype=np.uint8)
+            self.model.train_on_batch(inputs, inputs)
+
+            # Restore
+            self.model.load_weights(self.save_path)
+
+            # Step
+            with open(self.counters_path) as f:
+                counters = f.read()
+            step = int(counters.split(":")[1])
+
+            return step
 
     class TensorBoardLogger:
         """Visualize data on TensorBoard."""
@@ -166,7 +228,7 @@ class Trainer:
             with self.summary_writer.as_default():
                 tf.summary.trace_export(self.model.name, step=0)
 
-        def save_scalars(self, metrics, step):
+        def save_scalars(self, step, metrics):
             """Save scalars.
 
             :param metrics: a dict of (name: value)

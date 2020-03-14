@@ -49,7 +49,8 @@ def single_frame_model(frame_shape):
     outputs = x * 255
 
     # Build
-    model = tf.keras.Model(inputs=inputs, outputs=outputs, name='frame_model')
+    model = tf.keras.Model(
+        inputs=inputs, outputs=outputs, name='frame_autoencoder')
     model.summary()
     model.compile(
         optimizer="adam", loss="mae", metrics=["mae"])

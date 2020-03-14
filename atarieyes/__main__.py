@@ -31,6 +31,9 @@ def main():
     parser.add_argument(
         "-l", "--logs", type=int, default=log_frequency,
         help="Save logs after this number of batches")
+    parser.add_argument(
+        "-c", "--continue", action="store_true", dest="cont",
+        help="Continue from previous training.")
 
     args = parser.parse_args()
 
