@@ -78,7 +78,7 @@ class Trainer:
 
     def step(self):
         """Applies a single training step.
-        
+
         :return: outputs of the model.
         """
 
@@ -93,7 +93,8 @@ class Trainer:
         :return: a dict of losses and metrics
         """
 
-        return {name: loss for name, loss in
+        return {
+            name: loss for name, loss in
             zip(self.model.metrics_names, values)}
 
     @staticmethod
@@ -210,7 +211,7 @@ class Trainer:
 
         def save_graph(self, input_shape):
             """Save the graph of the model.
-            
+
             :param input_shape: the shape of the input tensor of the model
                 (without batch).
             """
@@ -231,13 +232,22 @@ class Trainer:
         def save_scalars(self, step, metrics):
             """Save scalars.
 
-            :param metrics: a dict of (name: value)
             :param step: the step number
+            :param metrics: a dict of (name: value)
             """
 
             with self.summary_writer.as_default():
                 for name, value in metrics.items():
                     tf.summary.scalar(name, value, step=step)
+
+        def save_images(self, step, images):
+            """Save an image.
+
+            :param step: the step number
+            :param images: the batch of images to visualize
+            """
+
+            pass
 
 
 def make_dataset(game_player, batch, frame_shape):
