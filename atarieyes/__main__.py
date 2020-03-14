@@ -13,6 +13,7 @@ def main():
 
     # Defaults
     batch = 10
+    log_frequency = 20
 
     # Parsing arguments
     parser = argparse.ArgumentParser(
@@ -22,16 +23,19 @@ def main():
         "-e", "--env", type=_gym_environment_arg,
         help="Identifier of a Gym environment")
     env_group.add_argument(
-        "-l", "--list", action="store_true", help="List all environments")
+        "-a", "--list_all", action="store_true", help="List all environments")
     parser.add_argument(
         "-r", "--render", action="store_true", help="Render while training.")
     parser.add_argument(
         "-b", "--batch", type=int, default=batch, help="Training batch size.")
+    parser.add_argument(
+        "-l", "--logs", type=int, default=log_frequency,
+        help="Save logs after this number of batches")
 
     args = parser.parse_args()
 
     # Go
-    if args.list:
+    if args.list_all:
         print(_environment_names())
         return
     else:

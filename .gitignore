@@ -1,6 +1,9 @@
+## Project
+/logs/
+/models/
+
 ## Packaging
 *.egg-info/
-
 
 ## Linux
 *~
