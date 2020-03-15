@@ -6,7 +6,7 @@ from abc import ABCMeta
 class ABCMeta2(ABCMeta):
     """This metaclass can be used just like ABCMeta.
 
-    It adds the possibility to declare instance abstrace attributes.
+    It adds the possibility to declare abstract instance attributes.
     These must be assigned to instances inside the __init__ method.
     How to use:
 
@@ -46,3 +46,10 @@ class ABCMeta2(ABCMeta):
 
 class AbstractAttribute:
     """Define an abstract attribute. See description in ABCMeta2."""
+
+
+class ABC2(metaclass=ABCMeta2):
+    """Abstract class through inheritance.
+
+    Use this class just like abc.ABC.
+    """

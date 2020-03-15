@@ -34,11 +34,11 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.single_frame_model(self.frame_shape)
+        self.model = models.SingleFrameModel(self.frame_shape)
 
         # Tools
-        self.saver = self.CheckpointSaver(self.model, model_path)
-        self.logger = self.TensorBoardLogger(self.model, log_path)
+        self.saver = self.CheckpointSaver(self.model.keras, model_path)
+        self.logger = self.TensorBoardLogger(self.model.keras, log_path)
 
     def train(self):
         """Train."""
@@ -53,10 +53,7 @@ class Trainer:
             print("> Weights restored.")
 
             # Initial valuation
-            frames = next(self.dataset_it)
-            outputs = self.model.evaluate(frames, frames)
-            self.logger.save_scalars(step, self.parse_outputs(outputs))
-
+            self.valuate(step)
             step += 1
 
         # Training loop
@@ -64,38 +61,48 @@ class Trainer:
         while True:
 
             # Do
-            outputs = self.step()
-            metrics = self.parse_outputs(outputs)
+            # TODO: tran now with step
 
             # Logs and savings
             if step % self.log_frequency == 0:
 
-                print("Step ", step, ", ", metrics, sep="", end="          \r")
+                metrics = self.valuate(step)
                 self.saver.save(step, -metrics["loss"])
-                self.logger.save_scalars(step, metrics)
+                print("Step ", step, ", ", metrics, sep="", end="          \r")
 
             step += 1
 
-    def step(self):
+    # TODO: tf.function here?
+    def step(self):# TODO: rename
         """Applies a single training step.
 
         :return: outputs of the model.
         """
+        return
 
+        # TODO: manual training
         frames = next(self.dataset_it)
         outputs = self.model.train_on_batch(frames, frames)
         return outputs
 
-    def parse_outputs(self, values):
-        """Parse outputs to a dict of values.
-
-        :param values: outputs of the model
-        :return: a dict of losses and metrics
+    def valuate(self, step):
+        """Compute the metrics on one batch and save log.
+        
+        :param step: current step.
+        :return: the saved quantities (metrics and loss)
         """
+        # TODO: add optional outputs parameters
 
-        return {
-            name: loss for name, loss in
-            zip(self.model.metrics_names, values)}
+        # Compute
+        frames = next(self.dataset_it)
+        ret = self.model.compute_all(frames)
+
+        # Log
+        metrics = dict(ret["metrics"])
+        metrics["loss"] = ret["loss"]
+        self.logger.save_scalars(step, metrics)
+
+        return metrics
 
     @staticmethod
     def _prepare_directories(resuming=False):

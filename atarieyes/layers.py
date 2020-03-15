@@ -3,10 +3,10 @@
 from abc import abstractmethod
 from tensorflow.keras import layers
 
-from atarieyes.tools import ABCMeta2
+from atarieyes.tools import ABC2
 
 
-class BaseLayer(layers.Layer, metaclass=ABCMeta2):
+class BaseLayer(layers.Layer, ABC2):
     """Base class for all layers and model parts.
 
     This is mainly used to create namespaces in TensorBoard graphs.
