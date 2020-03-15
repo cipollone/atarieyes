@@ -1,10 +1,12 @@
 """Various custom layers. Any conceptual block can be a layer."""
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from tensorflow.keras import layers
 
+from atarieyes.tools import ABCMeta2
 
-class BaseLayer(layers.Layer, ABC):
+
+class BaseLayer(layers.Layer, metaclass=ABCMeta2):
     """Base class for all layers and model parts.
 
     This is mainly used to create namespaces in TensorBoard graphs.
