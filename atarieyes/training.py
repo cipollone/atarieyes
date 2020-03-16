@@ -8,6 +8,7 @@ import tensorflow as tf
 
 from atarieyes import models
 
+# TODO: tf.functions?
 
 class Trainer:
     """Train a feature extractor."""
@@ -34,11 +35,11 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.single_frame_model(self.frame_shape)
+        self.model = models.SingleFrameModel(self.frame_shape)
 
         # Tools
-        self.saver = self.CheckpointSaver(self.model, model_path)
-        self.logger = self.TensorBoardLogger(self.model, log_path)
+        self.saver = self.CheckpointSaver(self.model.keras, model_path)
+        self.logger = self.TensorBoardLogger(self.model.keras, log_path)
 
     def train(self):
         """Train."""
@@ -53,10 +54,7 @@ class Trainer:
             print("> Weights restored.")
 
             # Initial valuation
-            frames = next(self.dataset_it)
-            outputs = self.model.evaluate(frames, frames)
-            self.logger.save_scalars(step, self.parse_outputs(outputs))
-
+            self.valuate(step)
             step += 1
 
         # Training loop
@@ -64,38 +62,50 @@ class Trainer:
         while True:
 
             # Do
-            outputs = self.step()
-            metrics = self.parse_outputs(outputs)
+            # TODO: tran now with step
 
             # Logs and savings
             if step % self.log_frequency == 0:
 
-                print("Step ", step, ", ", metrics, sep="", end="          \r")
+                metrics = self.valuate(step)
                 self.saver.save(step, -metrics["loss"])
-                self.logger.save_scalars(step, metrics)
+                print("Step ", step, ", ", metrics, sep="", end="          \r")
 
             step += 1
 
-    def step(self):
+    def step(self):# TODO: rename
         """Applies a single training step.
 
         :return: outputs of the model.
         """
+        return
 
+        # TODO: manual training
         frames = next(self.dataset_it)
         outputs = self.model.train_on_batch(frames, frames)
         return outputs
 
-    def parse_outputs(self, values):
-        """Parse outputs to a dict of values.
+    def valuate(self, step, outputs=None):
+        """Compute the metrics on one batch and save a log.
 
-        :param values: outputs of the model
-        :return: a dict of losses and metrics
+        When 'outputs' is not given, it runs the model to compute the metrics.
+        
+        :param step: current step.
+        :param outputs: (optional) outputs returned by Model.compute_all.
+        :return: the saved quantities (metrics and loss)
         """
+        
+        # Compute if not given
+        if not outputs:
+            frames = next(self.dataset_it)
+            outputs = self.model.compute_all(frames)
 
-        return {
-            name: loss for name, loss in
-            zip(self.model.metrics_names, values)}
+        # Log
+        metrics = dict(outputs["metrics"])
+        metrics["loss"] = outputs["loss"]
+        self.logger.save_scalars(step, metrics)
+
+        return metrics
 
     @staticmethod
     def _prepare_directories(resuming=False):
@@ -216,7 +226,7 @@ class Trainer:
                 (without batch).
             """
 
-            # Forward pass TODO: test without tf.function in future release
+            # Forward pass
             @tf.function
             def tracing_model_ops(inputs):
                 return self.model(inputs)

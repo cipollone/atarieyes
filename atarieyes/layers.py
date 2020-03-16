@@ -1,16 +1,16 @@
 """Various custom layers. Any conceptual block can be a layer."""
 
-from abc import abstractmethod
+import inspect
+import tensorflow as tf
 from tensorflow.keras import layers
 
-from atarieyes.tools import ABCMeta2
 
-
-class BaseLayer(layers.Layer, metaclass=ABCMeta2):
+class BaseLayer(layers.Layer):
     """Base class for all layers and model parts.
 
     This is mainly used to create namespaces in TensorBoard graphs.
     This must be subclassed, not instantiated directly.
+    Follow the keras subclassing API to properly subclass.
     There are two special members that can be used in subclasses:
         - self.layers_stack is the list of inner computations. Sequential
           layers can simply push to this list without the need of defining
@@ -81,6 +81,123 @@ class BaseLayer(layers.Layer, metaclass=ABCMeta2):
         config.update(self.layer_options)
         return config
 
-    @abstractmethod
-    def build(self, input_shape):
-        """Define the model and optionally fill the special members."""
+
+def make_layer(name, function):
+    """Create a Keras layer that calls the function.
+
+    This function creates a layer, that is a tensorflow namespace.
+    The first argument of the function must be for the inputs, and other
+    keyword-only options may follow. The created layer is a class that can be
+    initialized with arguments. These arguments will be used for 'function', at
+    each call. Other arguments are passed to keras.layers.Layer.
+
+    :param name: the name of the new layer.
+    :param function: the function to call;
+        the inputs must be the first argument.
+    :return: a new Keras layer that calls the function
+    """
+
+    def __init__(self, **kwargs):
+        """Initialize the layer."""
+
+        # Store the inner function
+        self._function = function
+
+        # Set the argument defaults
+        signature = inspect.signature(function)
+        arg_names = list(signature.parameters)
+        function_kwargs = {
+            arg: kwargs[arg] for arg in kwargs if arg in arg_names}
+        layer_kwargs = {
+            arg: kwargs[arg] for arg in kwargs if arg not in arg_names}
+        self._function_bound_args = signature.bind_partial(**function_kwargs)
+
+        # Super
+        BaseLayer.__init__(self, **layer_kwargs)
+
+    def call(self, inputs, **kwargs):
+        """Layer call method."""
+
+        # Collect args
+        defaults = self._function_bound_args.arguments
+        kwargs.pop("training", None)
+
+        # Merge args
+        kwargs_all = dict(defaults)
+        kwargs_all.update(kwargs)
+
+        # Run
+        return self._function(inputs, **kwargs_all)
+
+    # Define a new layer
+    LayerClass = type(name, (BaseLayer,), {'__init__': __init__, 'call': call})
+    return LayerClass
+
+
+class layerize:
+    """Function decorator to create Keras layers.
+
+    This decorator simplifies the use of 'make_layer'.
+    See make_layer() for further help. Use it as:
+
+        @layerize("MyLoss", globals())
+        def my_loss(inputs, other_args):
+            pass
+    """
+
+    def __init__(self, name, scope=None, **kwargs):
+        """Initialize.
+
+        :param name: name of the layer.
+        :param scope: namespace where to define the layer (such as globals()).
+            If omitted, the class is defined in this module.
+        """
+
+        self.name = name
+        self.scope = scope if scope is not None else globals()
+
+    def __call__(self, function):
+        """Decorator: create the layer.
+
+        :param function: the decorated TF function.
+        :return: the original function. The layer is defined as a side-effect.
+        """
+
+        # Create and export
+        NewLayer = make_layer(name=self.name, function=function)
+        self.scope[self.name] = NewLayer
+
+        return function
+
+
+@layerize("ScaleTo")
+def scale_to(inputs, from_range, to_range):
+    """Lineary scale input values from an input range to the output range.
+
+    :param inputs: input values.
+    :param from_range: a sequence of two values, min and max of the input data.
+    :param to_range: a sequence of two values, the output range.
+    :return: scaled inputs.
+    """
+
+    inputs = tf.cast(inputs, dtype=tf.float32)
+    scale = (to_range[1] - to_range[0]) / (from_range[1] - from_range[0])
+    out = (inputs - from_range[0]) * scale + to_range[0]
+    return out
+
+
+@layerize("LossMAE")
+def loss_mae(inputs):
+    """Mean absolute error.
+
+    :param inputs: a sequence of (y_true, y_pred) with the same shape.
+    :return: scalar
+    """
+
+    y_true, y_pred = inputs
+
+    y_true = tf.cast(y_true, dtype=tf.float32)
+    y_pred = tf.cast(y_pred, dtype=tf.float32)
+
+    loss = tf.reduce_mean(tf.abs(y_true - y_pred))
+    return loss
