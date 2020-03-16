@@ -4,7 +4,7 @@ from abc import abstractmethod
 import tensorflow as tf
 from tensorflow.keras import layers
 
-from atarieyes.layers import BaseLayer
+from atarieyes.layers import BaseLayer, ScaleTo, LossMAE
 from atarieyes.tools import ABC2, AbstractAttribute
 
 
@@ -49,15 +49,16 @@ class SingleFrameModel(Model):
             Assuming channel is last.
         """
 
-        # Define
+        # Define structure
         self.encoder = self.Encoder()
         self.decoder = self.Decoder()
 
-        # Create
+        self.loss = LossMAE()
+
+        # Keras model
         inputs = tf.keras.Input(shape=frame_shape, dtype=tf.uint8)
-        outputs = self.encoder(inputs)
-        outputs = self.decoder(outputs)
-        # TODO: can we use compute_all?
+        ret = self.compute_all(inputs)
+        outputs = (ret["output"], ret["loss"])
 
         model = tf.keras.Model(
             inputs=inputs, outputs=outputs, name='frame_autoencoder')
@@ -77,11 +78,7 @@ class SingleFrameModel(Model):
         # Forward
         outputs = self.encoder(inputs)
         reconstruction = self.decoder(outputs)
-
-        # Reconstruction loss
-        # TODO: MAE layer (layerize?)
-        inputs = tf.cast(inputs, dtype=tf.float32)
-        loss = tf.reduce_mean(tf.abs(inputs - reconstruction))
+        loss = self.loss((inputs, reconstruction))
 
         # Ret
         ret = {"output": outputs, "loss": loss, "metrics": {}}
@@ -94,7 +91,7 @@ class SingleFrameModel(Model):
 
             self.layers_stack = [
 
-                (lambda inputs: inputs / 255), # TODO: as layer
+                ScaleTo(from_range=(0, 255), to_range=(0, 1)),
 
                 layers.Conv2D(
                     filters=5, kernel_size=3, strides=1, padding="valid",
@@ -130,7 +127,7 @@ class SingleFrameModel(Model):
                     filters=3, kernel_size=(6, 4), strides=2, padding="valid",
                     activation="sigmoid"),
 
-                (lambda inputs: inputs * 255),
+                ScaleTo(from_range=(0, 1), to_range=(0, 255)),
             ]
 
             # Super

@@ -8,6 +8,7 @@ import tensorflow as tf
 
 from atarieyes import models
 
+# TODO: tf.functions?
 
 class Trainer:
     """Train a feature extractor."""
@@ -72,7 +73,6 @@ class Trainer:
 
             step += 1
 
-    # TODO: tf.function here?
     def step(self):# TODO: rename
         """Applies a single training step.
 
@@ -85,21 +85,24 @@ class Trainer:
         outputs = self.model.train_on_batch(frames, frames)
         return outputs
 
-    def valuate(self, step):
-        """Compute the metrics on one batch and save log.
+    def valuate(self, step, outputs=None):
+        """Compute the metrics on one batch and save a log.
+
+        When 'outputs' is not given, it runs the model to compute the metrics.
         
         :param step: current step.
+        :param outputs: (optional) outputs returned by Model.compute_all.
         :return: the saved quantities (metrics and loss)
         """
-        # TODO: add optional outputs parameters
-
-        # Compute
-        frames = next(self.dataset_it)
-        ret = self.model.compute_all(frames)
+        
+        # Compute if not given
+        if not outputs:
+            frames = next(self.dataset_it)
+            outputs = self.model.compute_all(frames)
 
         # Log
-        metrics = dict(ret["metrics"])
-        metrics["loss"] = ret["loss"]
+        metrics = dict(outputs["metrics"])
+        metrics["loss"] = outputs["loss"]
         self.logger.save_scalars(step, metrics)
 
         return metrics
@@ -223,7 +226,7 @@ class Trainer:
                 (without batch).
             """
 
-            # Forward pass TODO: test without tf.function in future release
+            # Forward pass
             @tf.function
             def tracing_model_ops(inputs):
                 return self.model(inputs)
