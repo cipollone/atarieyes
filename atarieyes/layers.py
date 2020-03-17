@@ -195,9 +195,5 @@ def loss_mae(inputs):
     """
 
     y_true, y_pred = inputs
-
-    y_true = tf.cast(y_true, dtype=tf.float32)
-    y_pred = tf.cast(y_pred, dtype=tf.float32)
-
     loss = tf.reduce_mean(tf.abs(y_true - y_pred))
     return loss

@@ -18,22 +18,33 @@ class Model(ABC2):
     The `keras` attribute is a keras model.
     """
 
+    # This is the compiled keras model
+    keras = AbstractAttribute()
+
     @abstractmethod
     def predict(self, inputs):
         """Make a prediction with the model."""
 
     @abstractmethod
     def compute_all(self, inputs):
-        """Compute output, loss, and metrics for training.
-        
+        """Compute all outputs, loss, and metrics.
+
         :param inputs: one batch.
-        :return: a dict of {"output": out, "loss": loss, "metrics": metrics}.
-            Where out is the result of predict(), loss is the training loss,
-            metrics is a dictionary of metrics.
+        :return: a dict of {"outputs": out, "loss": loss, "metrics": metrics}.
+            Where out is a sequence of output tensors, loss is the training
+            loss, metrics is a dictionary of metrics.
         """
 
-    # This is the compiled keras model
-    keras = AbstractAttribute()
+    @staticmethod
+    @abstractmethod
+    def output_images(outputs):
+        """Returns the images from all outputs.
+
+        :param outputs: a sequence of outputs, as returned by
+            compute_all["outputs"].
+        :return: a dict of {name: images} where each 'images' is a batch
+            extracted from outputs. The dict can be empty.
+        """
 
 
 class SingleFrameModel(Model):
@@ -57,8 +68,8 @@ class SingleFrameModel(Model):
 
         # Keras model
         inputs = tf.keras.Input(shape=frame_shape, dtype=tf.uint8)
-        ret = self.compute_all(inputs)
-        outputs = (ret["output"], ret["loss"])
+        ret = self.compute_all.python_function(inputs)
+        outputs = (*ret["outputs"], ret["loss"])
 
         model = tf.keras.Model(
             inputs=inputs, outputs=outputs, name='frame_autoencoder')
@@ -67,22 +78,33 @@ class SingleFrameModel(Model):
         # Store
         self.keras = model
 
+    @tf.function
     def predict(self, inputs):
         """Make predictions."""
 
         return self.encoder(inputs)
 
+    @tf.function
     def compute_all(self, inputs):
-        """Compute for training."""
+        """Compute all tensors."""
 
         # Forward
-        outputs = self.encoder(inputs)
-        reconstruction = self.decoder(outputs)
-        loss = self.loss((inputs, reconstruction))
+        inputs = tf.cast(inputs, tf.float32)
+        encoded = self.encoder(inputs)
+        decoded = self.decoder(encoded)
+        loss = self.loss((inputs, decoded))
+
+        decoded = tf.cast(decoded, tf.uint8)
 
         # Ret
-        ret = {"output": outputs, "loss": loss, "metrics": {}}
+        ret = {"outputs": (encoded, decoded), "loss": loss, "metrics": {}}
         return ret
+
+    @staticmethod
+    def output_images(outputs):
+        """Get images from outputs."""
+
+        return {"decoded": outputs[1]}
 
     class Encoder(BaseLayer):
 
@@ -132,4 +154,3 @@ class SingleFrameModel(Model):
 
             # Super
             BaseLayer.build(self, input_shape)
-
