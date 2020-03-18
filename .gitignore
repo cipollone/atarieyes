@@ -1,6 +1,7 @@
 ## Project
 /logs/
 /models/
+/envs_data/
 
 ## Packaging
 *.egg-info/

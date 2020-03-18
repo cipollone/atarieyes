@@ -6,6 +6,7 @@ import argparse
 import gym
 
 from atarieyes import training
+from atarieyes import selector
 
 
 def main():
@@ -18,30 +19,46 @@ def main():
     # Parsing arguments
     parser = argparse.ArgumentParser(
         description="Feature extraction on Atari Games.")
-    env_group = parser.add_mutually_exclusive_group(required=True)
-    env_group.add_argument(
-        "-e", "--env", type=_gym_environment_arg,
+    op_parsers = parser.add_subparsers(help="Operation", dest="op")
+
+    # List environment op
+    list_parser = op_parsers.add_parser(
+        "list", help="List all environments.")
+
+    # Train op
+    train_parser = op_parsers.add_parser(
+        "train", help="Train the feature extractor.")
+
+    train_parser.add_argument(
+        "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
-    env_group.add_argument(
-        "-a", "--list_all", action="store_true", help="List all environments")
-    parser.add_argument(
+    train_parser.add_argument(
         "-r", "--render", action="store_true", help="Render while training.")
-    parser.add_argument(
+    train_parser.add_argument(
         "-b", "--batch", type=int, default=batch, help="Training batch size.")
-    parser.add_argument(
+    train_parser.add_argument(
         "-l", "--logs", type=int, default=log_frequency,
         help="Save logs after this number of batches")
-    parser.add_argument(
+    train_parser.add_argument(
         "-c", "--continue", action="store_true", dest="cont",
         help="Continue from previous training.")
 
+    # Feature selection op
+    feature_parser = op_parsers.add_parser(
+        "select", help="Explicit selection of local features")
+    feature_parser.add_argument(
+        "-e", "--env", type=_gym_environment_arg,
+        help="Identifier of a Gym environment")
+    
     args = parser.parse_args()
 
     # Go
-    if args.list_all:
+    if args.op == "list":
         print(_environment_names())
         return
-    else:
+    elif args.op == "select":
+        selector.selection_tool(args)
+    elif args.op == "train":
         training.Trainer(args).train()
 
 
