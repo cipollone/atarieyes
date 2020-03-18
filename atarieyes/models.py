@@ -4,7 +4,7 @@ from abc import abstractmethod
 import tensorflow as tf
 from tensorflow.keras import layers
 
-from atarieyes.layers import BaseLayer, ScaleTo, LossMAE
+from atarieyes.layers import BaseLayer, ScaleTo, ImagePreprocessing, LossMSE
 from atarieyes.tools import ABC2, AbstractAttribute
 
 
@@ -64,7 +64,9 @@ class SingleFrameModel(Model):
         self.encoder = self.Encoder()
         self.decoder = self.Decoder()
 
-        self.loss = LossMAE()
+        self.preprocessing = ImagePreprocessing() 
+        self.scale_to = ScaleTo(from_range=(-1, 1), to_range=(0, 255))
+        self.loss = LossMSE()
 
         # Keras model
         inputs = tf.keras.Input(shape=frame_shape, dtype=tf.uint8)
@@ -89,11 +91,13 @@ class SingleFrameModel(Model):
         """Compute all tensors."""
 
         # Forward
-        inputs = tf.cast(inputs, tf.float32)
+        inputs = self.preprocessing(inputs)
         encoded = self.encoder(inputs)
         decoded = self.decoder(encoded)
         loss = self.loss((inputs, decoded))
 
+        # Image
+        decoded = self.scale_to(decoded)
         decoded = tf.cast(decoded, tf.uint8)
 
         # Ret
@@ -113,18 +117,16 @@ class SingleFrameModel(Model):
 
             self.layers_stack = [
 
-                ScaleTo(from_range=(0, 255), to_range=(0, 1)),
-
                 layers.Conv2D(
-                    filters=5, kernel_size=3, strides=1, padding="valid",
+                    filters=5, kernel_size=5, strides=1, padding="same",
                     activation="relu"),
                 layers.MaxPooling2D((2, 2), padding="same"),
                 layers.Conv2D(
-                    filters=10, kernel_size=3, strides=1, padding="valid",
+                    filters=10, kernel_size=5, strides=1, padding="same",
                     activation="relu"),
                 layers.MaxPooling2D((2, 2), padding="same"),
                 layers.Conv2D(
-                    filters=20, kernel_size=3, strides=1, padding="valid",
+                    filters=20, kernel_size=5, strides=1, padding="same",
                     activation="relu"),
                 layers.MaxPooling2D((2, 2), padding="same"),
             ]
@@ -140,16 +142,14 @@ class SingleFrameModel(Model):
             self.layers_stack = [
 
                 layers.Conv2DTranspose(
-                    filters=10, kernel_size=3, strides=2, padding="valid",
+                    filters=10, kernel_size=5, strides=2, padding="same",
                     activation="relu"),
                 layers.Conv2DTranspose(
-                    filters=5, kernel_size=3, strides=2, padding="valid",
+                    filters=5, kernel_size=5, strides=2, padding="same",
                     activation="relu"),
                 layers.Conv2DTranspose(
-                    filters=3, kernel_size=(6, 4), strides=2, padding="valid",
-                    activation="sigmoid"),
-
-                ScaleTo(from_range=(0, 1), to_range=(0, 255)),
+                    filters=3, kernel_size=5, strides=2, padding="same",
+                    activation="tanh"),
             ]
 
             # Super

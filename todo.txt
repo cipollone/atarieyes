@@ -1,0 +1,8 @@
+Things TODO:
+- improve initizazion
+
+- collect training samples from reinforcement learning
+
+Things done:
+- Simple autoencoder
+

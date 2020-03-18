@@ -22,12 +22,14 @@ class BaseLayer(layers.Layer):
     # Number all layers. Map classes to count
     _layers_count = {}
 
-    def __init__(self, **kwargs):
+    def __init__(self, *, verbose=False, **kwargs):
         """Initialize.
 
         This must be called from subclasses.
 
+        :param verbose: print debug informations for this layer.
         :param kwargs: Arguments forwarded to keras Layer.
+        :raises: TypeError: ensure a correcty use of this base class.
         """
 
         # Only from subclasses
@@ -58,6 +60,9 @@ class BaseLayer(layers.Layer):
             if not hasattr(self, key):
                 setattr(self, key, defaults[key])
 
+        # Parameters (non persistent)
+        self._verbose_layer = verbose
+
         # Super
         layers.Layer.__init__(self, **kwargs)
 
@@ -69,9 +74,19 @@ class BaseLayer(layers.Layer):
             raise NotImplementedError(
                 "call() must be overridden if self.layers_stack is not used.")
 
+        # deb
+        if self._verbose_layer:
+            print(self.name)
+            print(" - input shape:", inputs.shape)
+
         # Sequential model by default
         for layer in self.layers_stack:
             inputs = layer(inputs)
+
+            # deb
+            if self._verbose_layer:
+                print(" - output shape:", inputs.shape)
+
         return inputs
 
     def get_config(self):
@@ -180,10 +195,29 @@ def scale_to(inputs, from_range, to_range):
     :return: scaled inputs.
     """
 
-    inputs = tf.cast(inputs, dtype=tf.float32)
     scale = (to_range[1] - to_range[0]) / (from_range[1] - from_range[0])
     out = (inputs - from_range[0]) * scale + to_range[0]
     return out
+
+
+@layerize("ImagePreprocessing")
+def image_preprocessing(inputs):
+    """Input preprocessing function.
+
+    :param inputs: input values.
+    :return: transformed images.
+    """
+
+    # Cast from uint image
+    inputs = tf.cast(inputs, tf.float32)
+
+    # Choose an input range
+    inputs = scale_to(inputs, from_range=(0, 255), to_range=(-1, 1))
+
+    # Square shape is easier to handle
+    inputs = tf.image.resize(inputs, size=(256, 256))
+
+    return inputs
 
 
 @layerize("LossMAE")
@@ -196,4 +230,17 @@ def loss_mae(inputs):
 
     y_true, y_pred = inputs
     loss = tf.reduce_mean(tf.abs(y_true - y_pred))
+    return loss
+
+
+@layerize("LossMSE")
+def loss_mse(inputs):
+    """Mean squared error.
+
+    :param inputs: a sequence of (y_true, y_pred) with the same shape.
+    :return: scalar
+    """
+
+    y_true, y_pred = inputs
+    loss = tf.reduce_mean(tf.math.squared_difference(y_true, y_pred))
     return loss
