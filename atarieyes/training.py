@@ -34,7 +34,10 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.SingleFrameModel(self.frame_shape)
+        self.model = models.SingleFrameModel(
+            frame_shape=self.frame_shape,
+            env_name=self.env.spec.id
+        )
 
         # Optimization
         self.params = self.model.keras.trainable_variables

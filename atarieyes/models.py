@@ -53,18 +53,19 @@ class SingleFrameModel(Model):
     This is an autoencoder which encodes a single frame of the game.
     """
 
-    def __init__(self, frame_shape):
+    def __init__(self, frame_shape, env_name):
         """Initialize.
 
         :param frame_shape: the shape of the input frame (sequence of ints).
             Assuming channel is last.
+        :param env_name: a gym environment name.
         """
 
         # Define structure
-        self.encoder = self.Encoder()
-        self.decoder = self.Decoder()
+        self.encoder = self.Encoder(verbose=True)
+        self.decoder = self.Decoder(verbose=True)
 
-        self.preprocessing = ImagePreprocessing() 
+        self.preprocessing = ImagePreprocessing(env_name=env_name) 
         self.scale_to = ScaleTo(from_range=(-1, 1), to_range=(0, 255))
         self.loss = LossMSE()
 
@@ -118,17 +119,14 @@ class SingleFrameModel(Model):
             self.layers_stack = [
 
                 layers.Conv2D(
-                    filters=5, kernel_size=5, strides=1, padding="same",
-                    activation="relu"),
-                layers.MaxPooling2D((2, 2), padding="same"),
+                    filters=32, kernel_size=8, strides=4, padding="same",
+                    activation="selu"),
                 layers.Conv2D(
-                    filters=10, kernel_size=5, strides=1, padding="same",
-                    activation="relu"),
-                layers.MaxPooling2D((2, 2), padding="same"),
+                    filters=64, kernel_size=4, strides=2, padding="same",
+                    activation="selu"),
                 layers.Conv2D(
-                    filters=20, kernel_size=5, strides=1, padding="same",
+                    filters=32, kernel_size=4, strides=2, padding="same",
                     activation="relu"),
-                layers.MaxPooling2D((2, 2), padding="same"),
             ]
 
             # Super
@@ -142,13 +140,13 @@ class SingleFrameModel(Model):
             self.layers_stack = [
 
                 layers.Conv2DTranspose(
-                    filters=10, kernel_size=5, strides=2, padding="same",
-                    activation="relu"),
+                    filters=64, kernel_size=4, strides=2, padding="same",
+                    activation="selu"),
                 layers.Conv2DTranspose(
-                    filters=5, kernel_size=5, strides=2, padding="same",
-                    activation="relu"),
+                    filters=32, kernel_size=4, strides=2, padding="same",
+                    activation="selu"),
                 layers.Conv2DTranspose(
-                    filters=3, kernel_size=5, strides=2, padding="same",
+                    filters=3, kernel_size=8, strides=4, padding="same",
                     activation="tanh"),
             ]
 

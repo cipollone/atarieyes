@@ -1,8 +1,11 @@
 Things TODO:
+- Learning rate parameter
+- Try atari version
 - improve initizazion
 
 - collect training samples from reinforcement learning
 
 Things done:
 - Simple autoencoder
+- Focus on a part of the image
 

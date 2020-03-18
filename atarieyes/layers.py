@@ -200,13 +200,47 @@ def scale_to(inputs, from_range, to_range):
     return out
 
 
+@layerize("CrobToEnvBox")
+def crop_to_env_box(inputs, env_name, strict=False):
+    """Crop frames of a atari gym environment.
+    
+    The purpose of this function is to focus on the important part of the frame
+    for each game. Each game has its own box.
+
+    :param inputs: a batch of frames 4D.
+    :param env_name: a gym environment name.
+    :param strict: if true, raises an error when the env has no box defined.
+    :return: batch of cropped frames.
+    :raises: ValueError: if unknown env, and strict.
+    """
+
+    boxes = {
+        "Breakout-v4": (slice(32, 196), slice(8, 152)),
+    }
+
+    # Unknown
+    if env_name not in boxes:
+        if strict:
+            raise ValueError("No box defined for " + str(env_name))
+        else:
+            return inputs
+
+    # Crop
+    box = boxes[env_name]
+    return inputs[:, box[0], box[1], :]
+
+
 @layerize("ImagePreprocessing")
-def image_preprocessing(inputs):
+def image_preprocessing(inputs, env_name):
     """Input preprocessing function.
 
     :param inputs: input values.
+    :param env_name: name of an atari environment.
     :return: transformed images.
     """
+
+    # Crop
+    inputs = crop_to_env_box(inputs, env_name, strict=True)
 
     # Cast from uint image
     inputs = tf.cast(inputs, tf.float32)
@@ -215,7 +249,7 @@ def image_preprocessing(inputs):
     inputs = scale_to(inputs, from_range=(0, 255), to_range=(-1, 1))
 
     # Square shape is easier to handle
-    inputs = tf.image.resize(inputs, size=(256, 256))
+    inputs = tf.image.resize(inputs, size=(160, 160))
 
     return inputs
 
