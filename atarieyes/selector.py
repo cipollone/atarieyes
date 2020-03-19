@@ -49,8 +49,8 @@ def selection_tool(args):
     selections.pop()
 
     # Scale down
-    box = np.round(np.array(box) / f).tolist()
-    selections = np.round(np.array(selections) / f).tolist()
+    box = np.round(np.array(box) / f).astype(int).tolist()
+    selections = np.round(np.array(selections) / f).astype(int).tolist()
 
     # Format data
     data = {}

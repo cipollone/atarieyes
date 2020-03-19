@@ -1,8 +1,13 @@
 """Various custom layers. Any conceptual block can be a layer."""
 
+import json
+import os
 import inspect
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
+
+from atarieyes import selector
 
 
 class BaseLayer(layers.Layer):
@@ -200,58 +205,83 @@ def scale_to(inputs, from_range, to_range):
     return out
 
 
-@layerize("CrobToEnvBox")
-def crop_to_env_box(inputs, env_name, strict=False):
+class CropToEnvBox(BaseLayer):
     """Crop frames of a atari gym environment.
     
     The purpose of this function is to focus on the important part of the frame
-    for each game. Each game has its own box.
-
-    :param inputs: a batch of frames 4D.
-    :param env_name: a gym environment name.
-    :param strict: if true, raises an error when the env has no box defined.
-    :return: batch of cropped frames.
-    :raises: ValueError: if unknown env, and strict.
+    for each game. The box of each game can be specified with the selector.
     """
 
-    boxes = {
-        "Breakout-v4": (slice(32, 196), slice(8, 152)),
-    }
+    def __init__(self, env_name, **kwargs):
+        """Initialize.
 
-    # Unknown
-    if env_name not in boxes:
-        if strict:
-            raise ValueError("No box defined for " + str(env_name))
+        :param env_name: a gym environment name.
+        :raises: ValueError: if unknown env.
+        """
+
+        # Load boxes
+        env_json = os.path.join(selector.info_dir, env_name + ".json")
+        if not os.path.exists(env_json):
+            box = None
         else:
-            return inputs
+            with open(env_json) as f:
+                env_data = json.load(f)
+            box = env_data["box"]
 
-    # Crop
-    box = boxes[env_name]
-    return inputs[:, box[0], box[1], :]
+        # Check
+        if not box:
+            msg = ("No box defined for " + str(env_name) + ". "
+                "Run:\n  atarieyes select -e " + str(env_name))
+            raise ValueError(msg)
+
+        # Set
+        self._box_slice_w = slice(box[0], box[2])
+        self._box_slice_h = slice(box[1], box[3])
+
+        # Super
+        BaseLayer.__init__(self, **kwargs)
+
+        # Store
+        self.layer_options = {
+            "env_name": env_name,
+        }
+
+    def call(self, inputs):
+        """Crop a batch of frames."""
+
+        return inputs[:, self._box_slice_h, self._box_slice_w, :]
 
 
-@layerize("ImagePreprocessing")
-def image_preprocessing(inputs, env_name):
-    """Input preprocessing function.
+class ImagePreprocessing(BaseLayer):
+    """Image preprocessing layer."""
 
-    :param inputs: input values.
-    :param env_name: name of an atari environment.
-    :return: transformed images.
-    """
+    def __init__(self, env_name, **kwargs):
+        """Initialize.
 
-    # Crop
-    inputs = crop_to_env_box(inputs, env_name, strict=True)
+        :param env_name: a gym environment name.
+        """
 
-    # Cast from uint image
-    inputs = tf.cast(inputs, tf.float32)
+        self.crop = CropToEnvBox(env_name)
 
-    # Choose an input range
-    inputs = scale_to(inputs, from_range=(0, 255), to_range=(-1, 1))
+        # Super
+        BaseLayer.__init__(self, **kwargs)
 
-    # Square shape is easier to handle
-    inputs = tf.image.resize(inputs, size=(160, 160))
+    def call(self, inputs):
+        """Preprocess."""
 
-    return inputs
+        # Crop
+        inputs = self.crop(inputs)
+
+        # Cast from uint image
+        inputs = tf.cast(inputs, tf.float32)
+
+        # Choose an input range
+        inputs = scale_to(inputs, from_range=(0, 255), to_range=(-1, 1))
+
+        # Square shape is easier to handle
+        inputs = tf.image.resize(inputs, size=(160, 160))
+
+        return inputs
 
 
 @layerize("LossMAE")

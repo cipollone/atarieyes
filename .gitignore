@@ -1,10 +1,10 @@
 ## Project
 /logs/
 /models/
-/envs_data/
 
 ## Packaging
 *.egg-info/
+/Pipenv.lock
 
 ## Linux
 *~
