@@ -12,7 +12,7 @@ info_dir = "envs_data"
 
 def selection_tool(args):
     """Starts a graphical tool for feature selection.
-    
+
     This allows to manually select:
         - The image box, that is the large region where the game is displayed.
             This allows to ignore the useless borders and numbers.
@@ -67,4 +67,3 @@ def selection_tool(args):
     os.makedirs(info_dir, exist_ok=True)
     with open(env_file, "w") as f:
         json.dump(data, f, indent=4, sort_keys=True)
-

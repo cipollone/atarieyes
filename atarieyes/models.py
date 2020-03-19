@@ -2,9 +2,9 @@
 
 from abc import abstractmethod
 import tensorflow as tf
-from tensorflow.keras import layers
 
-from atarieyes.layers import BaseLayer, ScaleTo, ImagePreprocessing, LossMSE
+from atarieyes import layers
+from atarieyes.layers import BaseLayer
 from atarieyes.tools import ABC2, AbstractAttribute
 
 
@@ -65,9 +65,10 @@ class SingleFrameModel(Model):
         self.encoder = self.Encoder(verbose=True)
         self.decoder = self.Decoder(verbose=True)
 
-        self.preprocessing = ImagePreprocessing(env_name=env_name) 
-        self.scale_to = ScaleTo(from_range=(-1, 1), to_range=(0, 255))
-        self.loss = LossMSE()
+        self.preprocessing = layers.ImagePreprocessing(
+            env_name=env_name, out_size=(128, 128))
+        self.scale_to = layers.ScaleTo(from_range=(-1, 1), to_range=(0, 255))
+        self.loss = layers.LossMSE()
 
         # Keras model
         inputs = tf.keras.Input(shape=frame_shape, dtype=tf.uint8)
@@ -119,15 +120,15 @@ class SingleFrameModel(Model):
 
             self.layers_stack = [
 
-                layers.Conv2D(
-                    filters=32, kernel_size=8, strides=4, padding="same",
+                layers.ConvBlock(
+                    filters=32, kernel_size=8, strides=4, padding="reflect",
                     activation="selu"),
-                layers.Conv2D(
-                    filters=64, kernel_size=4, strides=2, padding="same",
-                    activation="selu"),
-                layers.Conv2D(
+                layers.ConvBlock(
                     filters=32, kernel_size=4, strides=2, padding="same",
-                    activation="relu"),
+                    activation="selu"),
+                layers.ConvBlock(
+                    filters=32, kernel_size=4, strides=2, padding="same",
+                    activation="selu"),
             ]
 
             # Super
@@ -140,15 +141,15 @@ class SingleFrameModel(Model):
 
             self.layers_stack = [
 
-                layers.Conv2DTranspose(
-                    filters=64, kernel_size=4, strides=2, padding="same",
-                    activation="selu"),
-                layers.Conv2DTranspose(
+                layers.ConvBlock(
                     filters=32, kernel_size=4, strides=2, padding="same",
-                    activation="selu"),
-                layers.Conv2DTranspose(
+                    activation="selu", transpose=True),
+                layers.ConvBlock(
+                    filters=32, kernel_size=4, strides=2, padding="same",
+                    activation="selu", transpose=True),
+                layers.ConvBlock(
                     filters=3, kernel_size=8, strides=4, padding="same",
-                    activation="tanh"),
+                    activation="tanh", transpose=True),
             ]
 
             # Super

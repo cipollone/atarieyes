@@ -15,6 +15,7 @@ def main():
     # Defaults
     batch = 10
     log_frequency = 20
+    learning_rate = 0.001
 
     # Parsing arguments
     parser = argparse.ArgumentParser(
@@ -22,8 +23,7 @@ def main():
     op_parsers = parser.add_subparsers(help="Operation", dest="op")
 
     # List environment op
-    list_parser = op_parsers.add_parser(
-        "list", help="List all environments.")
+    op_parsers.add_parser("list", help="List all environments.")
 
     # Train op
     train_parser = op_parsers.add_parser(
@@ -33,7 +33,7 @@ def main():
         "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
     train_parser.add_argument(
-        "-r", "--render", action="store_true", help="Render while training.")
+        "--render", action="store_true", help="Render while training.")
     train_parser.add_argument(
         "-b", "--batch", type=int, default=batch, help="Training batch size.")
     train_parser.add_argument(
@@ -42,6 +42,9 @@ def main():
     train_parser.add_argument(
         "-c", "--continue", action="store_true", dest="cont",
         help="Continue from previous training.")
+    train_parser.add_argument(
+        "-r", "--rate", type=float, default=learning_rate,
+        help="Learning rate of the Adam optimizer.")
 
     # Feature selection op
     feature_parser = op_parsers.add_parser(
@@ -49,7 +52,7 @@ def main():
     feature_parser.add_argument(
         "-e", "--env", type=_gym_environment_arg,
         help="Identifier of a Gym environment")
-    
+
     args = parser.parse_args()
 
     # Go

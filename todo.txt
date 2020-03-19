@@ -1,6 +1,6 @@
 Things TODO:
-- Mirror before convolution
-- Learning rate parameter
+- More sparse training samples
+- Batch, instance normalization?
 - Try atari version
 - improve initizazion
 
@@ -9,4 +9,4 @@ Things TODO:
 Things done:
 - Simple autoencoder
 - Focus on a part of the image
-
+- Pad reflection

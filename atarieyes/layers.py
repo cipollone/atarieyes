@@ -3,7 +3,6 @@
 import json
 import os
 import inspect
-import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
 
@@ -160,9 +159,11 @@ class layerize:
     This decorator simplifies the use of 'make_layer'.
     See make_layer() for further help. Use it as:
 
-        @layerize("MyLoss", globals())
-        def my_loss(inputs, other_args):
-            pass
+    ```
+    @layerize("MyLoss", globals())
+    def my_loss(inputs, other_args):
+        pass
+    ```
     """
 
     def __init__(self, name, scope=None, **kwargs):
@@ -190,6 +191,69 @@ class layerize:
         return function
 
 
+class ConvBlock(BaseLayer):
+    """Generic convolutional block."""
+
+    def __init__(
+        self, *, transpose=False, padding="same", verbose=False, **kwargs
+    ):
+        """Inititialize.
+
+        :param transpose: if True, this becomes a Conv2DTranspose
+        :param padding: "valid", "same", or "reflect".
+        :param verbose: print debug informations for this layer.
+        :param kwargs: all arguments accepted by keras.layers.Conv2D.
+        """
+
+        # Super
+        BaseLayer.__init__(self, verbose=verbose)
+
+        # Save options
+        kwargs["padding"] = padding
+        kwargs["transpose"] = transpose
+        self.layer_options = kwargs
+
+    def build(self, input_shape):
+        """Instantiate."""
+
+        options = dict(self.layer_options)
+        transpose = options.pop("transpose")
+        self.layers_stack = []
+
+        # Reflection
+        if options["padding"] == "reflect":
+
+            # Compute pad
+            size = options["kernel_size"]
+            if not isinstance(size, int):
+                raise NotImplementedError(
+                    "Reflection with non-square kernel is not supported.")
+            rpad = int(size / 2)
+            lpad = rpad if rpad < size/2 else rpad-1
+            paddings = [[0, 0], [lpad, rpad], [lpad, rpad], [0, 0]]
+
+            # Apply and remove from conv
+            self.layers_stack.append(
+                Pad(paddings=paddings, mode="REFLECT"))  # noqa: F821
+            options["padding"] = "valid"
+
+        # Conv + activation
+        self.layers_stack.append(
+            layers.Conv2D(**options) if not transpose else
+            layers.Conv2DTranspose(**options)
+        )
+
+        # Super
+        BaseLayer.build(self, input_shape)
+
+
+@layerize("Pad")
+def pad(inputs, paddings, mode, constant_values=0):
+    """Padding layer. For help see tf.pad function."""
+
+    return tf.pad(inputs, paddings, mode, constant_values)
+
+
 @layerize("ScaleTo")
 def scale_to(inputs, from_range, to_range):
     """Lineary scale input values from an input range to the output range.
@@ -207,7 +271,7 @@ def scale_to(inputs, from_range, to_range):
 
 class CropToEnvBox(BaseLayer):
     """Crop frames of a atari gym environment.
-    
+
     The purpose of this function is to focus on the important part of the frame
     for each game. The box of each game can be specified with the selector.
     """
@@ -230,9 +294,9 @@ class CropToEnvBox(BaseLayer):
 
         # Check
         if not box:
-            msg = ("No box defined for " + str(env_name) + ". "
+            raise ValueError(
+                "No box defined for " + str(env_name) + ". "
                 "Run:\n  atarieyes select -e " + str(env_name))
-            raise ValueError(msg)
 
         # Set
         self._box_slice_w = slice(box[0], box[2])
@@ -255,16 +319,22 @@ class CropToEnvBox(BaseLayer):
 class ImagePreprocessing(BaseLayer):
     """Image preprocessing layer."""
 
-    def __init__(self, env_name, **kwargs):
+    def __init__(self, env_name, out_size, **kwargs):
         """Initialize.
 
         :param env_name: a gym environment name.
+        :param out_size: output frame size 2 ints.
         """
-
-        self.crop = CropToEnvBox(env_name)
 
         # Super
         BaseLayer.__init__(self, **kwargs)
+
+        # Store
+        self.layer_options = {
+            "out_size": out_size,
+        }
+
+        self.crop = CropToEnvBox(env_name)
 
     def call(self, inputs):
         """Preprocess."""
@@ -279,7 +349,7 @@ class ImagePreprocessing(BaseLayer):
         inputs = scale_to(inputs, from_range=(0, 255), to_range=(-1, 1))
 
         # Square shape is easier to handle
-        inputs = tf.image.resize(inputs, size=(160, 160))
+        inputs = tf.image.resize(inputs, size=self.layer_options["out_size"])
 
         return inputs
 

@@ -41,7 +41,7 @@ class Trainer:
 
         # Optimization
         self.params = self.model.keras.trainable_variables
-        self.optimizer = tf.optimizers.Adam()
+        self.optimizer = tf.optimizers.Adam(args.rate)
 
         # Tools
         self.saver = self.CheckpointSaver(self.model.keras, model_path)
