@@ -36,6 +36,10 @@ def selection_tool(args):
     print("> Select game region")
     box = cv.selectROI("frame", image0)
 
+    # Return if cancelled
+    if box[2] == 0 or box[3] == 0:
+        return
+
     # Select features
     print("> Select small local features")
     selection = [0, 0, 1, 1]
