@@ -4,6 +4,7 @@
 
 ## Packaging
 *.egg-info/
+/Pipenv.lock
 
 ## Linux
 *~

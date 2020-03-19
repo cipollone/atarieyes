@@ -85,6 +85,7 @@ class SingleFrameModel(Model):
     def predict(self, inputs):
         """Make predictions."""
 
+        inputs = self.preprocessing(inputs)
         return self.encoder(inputs)
 
     @tf.function

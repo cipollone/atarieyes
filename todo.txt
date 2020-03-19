@@ -1,4 +1,5 @@
 Things TODO:
+- Mirror before convolution
 - Learning rate parameter
 - Try atari version
 - improve initizazion
