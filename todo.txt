@@ -1,0 +1,9 @@
+Things TODO:
+- collect training samples during reinforcement learning
+- Batch, instance normalization?
+- improve initizazion
+
+Things done:
+- Simple autoencoder
+- Focus on a part of the image
+- Pad reflection

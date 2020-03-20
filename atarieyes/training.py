@@ -34,11 +34,18 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.single_frame_model(self.frame_shape)
+        self.model = models.SingleFrameModel(
+            frame_shape=self.frame_shape,
+            env_name=self.env.spec.id
+        )
+
+        # Optimization
+        self.params = self.model.keras.trainable_variables
+        self.optimizer = tf.optimizers.Adam(args.rate)
 
         # Tools
-        self.saver = self.CheckpointSaver(self.model, model_path)
-        self.logger = self.TensorBoardLogger(self.model, log_path)
+        self.saver = self.CheckpointSaver(self.model.keras, model_path)
+        self.logger = self.TensorBoardLogger(self.model.keras, log_path)
 
     def train(self):
         """Train."""
@@ -53,10 +60,7 @@ class Trainer:
             print("> Weights restored.")
 
             # Initial valuation
-            frames = next(self.dataset_it)
-            outputs = self.model.evaluate(frames, frames)
-            self.logger.save_scalars(step, self.parse_outputs(outputs))
-
+            self.valuate(step)
             step += 1
 
         # Training loop
@@ -64,37 +68,59 @@ class Trainer:
         while True:
 
             # Do
-            outputs = self.step()
-            metrics = self.parse_outputs(outputs)
+            outputs = self.train_step()
 
             # Logs and savings
             if step % self.log_frequency == 0:
 
-                print("Step ", step, ", ", metrics, sep="", end="          \r")
+                metrics = self.valuate(step, outputs)
                 self.saver.save(step, -metrics["loss"])
-                self.logger.save_scalars(step, metrics)
+                print("Step ", step, ", ", metrics, sep="", end="          \r")
 
             step += 1
 
-    def step(self):
+    @tf.function
+    def train_step(self):
         """Applies a single training step.
-        
+
         :return: outputs of the model.
         """
 
-        frames = next(self.dataset_it)
-        outputs = self.model.train_on_batch(frames, frames)
+        # Forward
+        with tf.GradientTape() as tape:
+            outputs = self.model.compute_all(next(self.dataset_it))
+
+        # Compute and apply grandient
+        gradients = tape.gradient(outputs["loss"], self.params)
+        self.optimizer.apply_gradients(zip(gradients, self.params))
+
         return outputs
 
-    def parse_outputs(self, values):
-        """Parse outputs to a dict of values.
+    def valuate(self, step, outputs=None):
+        """Compute the metrics on one batch and save a log.
 
-        :param values: outputs of the model
-        :return: a dict of losses and metrics
+        When 'outputs' is not given, it runs the model to compute the metrics.
+
+        :param step: current step.
+        :param outputs: (optional) outputs returned by Model.compute_all.
+        :return: the saved quantities (metrics and loss)
         """
 
-        return {name: loss for name, loss in
-            zip(self.model.metrics_names, values)}
+        # Compute if not given
+        if not outputs:
+            frames = next(self.dataset_it)
+            outputs = self.model.compute_all(frames)
+
+        # Log scalars
+        metrics = dict(outputs["metrics"])
+        metrics["loss"] = outputs["loss"]
+        self.logger.save_scalars(step, metrics)
+
+        # Log images
+        images = self.model.output_images(outputs["outputs"])
+        self.logger.save_images(step, images)
+
+        return metrics
 
     @staticmethod
     def _prepare_directories(resuming=False):
@@ -175,14 +201,12 @@ class Trainer:
         def load(self, input_shape):
             """Restore weights from the previous checkpoint.
 
+            NOTE: optimizer state is not restored.
+
             :param input_shape: shape of the input tensors (without batch).
                 This is used to initialize the optimizer before restoring.
             :return: the step of the saved weights
             """
-
-            # Initialize optimizer with a fake train
-            inputs = np.zeros((1, *input_shape), dtype=np.uint8)
-            self.model.train_on_batch(inputs, inputs)
 
             # Restore
             self.model.load_weights(self.save_path)
@@ -200,7 +224,7 @@ class Trainer:
         def __init__(self, model, path):
             """Initialize.
 
-            :param model: model that should be saved.
+            :param model: tensorflow model that should be saved.
             :param path: directory where logs should be saved.
             """
 
@@ -210,12 +234,12 @@ class Trainer:
 
         def save_graph(self, input_shape):
             """Save the graph of the model.
-            
+
             :param input_shape: the shape of the input tensor of the model
                 (without batch).
             """
 
-            # Forward pass TODO: test without tf.function in future release
+            # Forward pass
             @tf.function
             def tracing_model_ops(inputs):
                 return self.model(inputs)
@@ -231,13 +255,27 @@ class Trainer:
         def save_scalars(self, step, metrics):
             """Save scalars.
 
-            :param metrics: a dict of (name: value)
             :param step: the step number
+            :param metrics: a dict of (name: value)
             """
 
             with self.summary_writer.as_default():
                 for name, value in metrics.items():
                     tf.summary.scalar(name, value, step=step)
+
+        def save_images(self, step, images):
+            """Save images in TensorBoard.
+
+            :param step: the step number
+            :param images: a dict of batches of images. Only the first
+                of each group is displayed.
+            """
+
+            with self.summary_writer.as_default():
+                for name, batch in images.items():
+                    image = batch[0]
+                    image = tf.expand_dims(image, axis=0)
+                    tf.summary.image(name, image, step)
 
 
 def make_dataset(game_player, batch, frame_shape):
