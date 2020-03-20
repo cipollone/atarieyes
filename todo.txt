@@ -1,4 +1,6 @@
 Things TODO:
+- Run a tensorforce agent (do not rename anything yet)
+
 - collect training samples during reinforcement learning
 - Batch, instance normalization?
 - improve initizazion
