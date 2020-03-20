@@ -1,10 +1,7 @@
 Things TODO:
-- More sparse training samples
+- collect training samples during reinforcement learning
 - Batch, instance normalization?
-- Try atari version
 - improve initizazion
-
-- collect training samples from reinforcement learning
 
 Things done:
 - Simple autoencoder
