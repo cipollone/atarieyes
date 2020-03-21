@@ -1,5 +1,7 @@
 """Generic utilities."""
 
+import os
+import shutil
 from abc import ABCMeta
 
 
@@ -53,3 +55,44 @@ class ABC2(metaclass=ABCMeta2):
 
     Use this class just like abc.ABC.
     """
+
+
+def prepare_directories(what, env_name, resuming=False):
+    """Prepare the directories where weights and logs are saved.
+
+    :param what: what is trained, usually 'agent' or 'features'.
+    :param env_name: the actual paths are a composition of
+        'what' and 'env_name'.
+    :param resuming: if True, the directories are not deleted.
+    :return: two paths, respectively for models and logs.
+    """
+
+    # Choose diretories
+    models_path = os.path.join("models", what, env_name)
+    logs_path = os.path.join("logs", what, env_name)
+    dirs = (models_path, logs_path)
+
+    # Delete old ones
+    if not resuming:
+        if any(os.path.exists(d) for d in dirs):
+            print(
+                "Old logs and models will be deleted. Continue (Y/n)? ",
+                end="")
+            c = input()
+            if c not in ("y", "Y", ""):
+                quit()
+
+        # New
+        for d in dirs:
+            if os.path.exists(d):
+                shutil.rmtree(d)
+            os.makedirs(d)
+
+    # Logs alwas use new directories (using increasing numbers)
+    i = 0
+    while os.path.exists(os.path.join(logs_path, str(i))):
+        i += 1
+    log_path = os.path.join(logs_path, str(i))
+    os.mkdir(log_path)
+
+    return (models_path, log_path)

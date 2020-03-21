@@ -7,6 +7,7 @@ import numpy as np
 import tensorflow as tf
 
 from atarieyes import models
+from atarieyes import tools
 
 
 class Trainer:
@@ -21,7 +22,8 @@ class Trainer:
         # Init
         self.log_frequency = args.logs
         self.cont = args.cont
-        model_path, log_path = self._prepare_directories(resuming=self.cont)
+        model_path, log_path = tools.prepare_directories(
+            "features", args.env, resuming=self.cont)
 
         # Environment
         self.env = gym.make(args.env)
@@ -121,44 +123,6 @@ class Trainer:
         self.logger.save_images(step, images)
 
         return metrics
-
-    @staticmethod
-    def _prepare_directories(resuming=False):
-        """Prepare the directories where weights and logs are saved.
-
-        :param resuming: If True, the directories are not deleted.
-        :return: two paths, respectively for models and logs.
-        """
-
-        # Common directories
-        models_path = "models"
-        logs_path = "logs"
-        dirs = (models_path, logs_path)
-
-        # Delete old ones
-        if not resuming:
-            if any(os.path.exists(d) for d in dirs):
-                print(
-                    "Old logs and models will be deleted. Continue (Y/n)? ",
-                    end="")
-                c = input()
-                if c not in ("y", "Y", ""):
-                    quit()
-
-            # New
-            for d in dirs:
-                if os.path.exists(d):
-                    shutil.rmtree(d)
-                os.makedirs(d)
-
-        # Logs alwas use new directories (using increasing numbers)
-        i = 0
-        while os.path.exists(os.path.join(logs_path, str(i))):
-            i += 1
-        log_path = os.path.join(logs_path, str(i))
-        os.mkdir(log_path)
-
-        return (models_path, log_path)
 
     class CheckpointSaver:
         """Save weights and restore."""

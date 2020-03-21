@@ -1,7 +1,7 @@
 Things TODO:
-- Review of TensorForce RL agents and algorithms
-- Setup an agent
-- Write a training file in reinforcement
+- Debug why iter(dataset) in features.train is now a problem?
+- Write a training file
+- Reorganize directories per environment per agent/features
 - Train on the server
 - Streaming frames in streaming.py
 
@@ -13,3 +13,4 @@ Things TODO:
 Things done:
 - Simple autoencoder
 - Focus on a part of the image
+- Tensorforce for dqn
