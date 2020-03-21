@@ -1,6 +1,11 @@
 Things TODO:
-- Run a tensorforce agent (do not rename anything yet)
+- Review of TensorForce RL agents and algorithms
+- Setup an agent
+- Write a training file in reinforcement
+- Train on the server
+- Streaming frames in streaming.py
 
+- Divide models and logs per env
 - collect training samples during reinforcement learning
 - Batch, instance normalization?
 - improve initizazion
@@ -8,4 +13,3 @@ Things TODO:
 Things done:
 - Simple autoencoder
 - Focus on a part of the image
-- Pad reflection

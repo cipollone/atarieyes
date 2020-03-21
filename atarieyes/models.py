@@ -1,4 +1,4 @@
-"""Neural networks for feature extraction."""
+"""Definitions for all models."""
 
 from abc import abstractmethod
 import tensorflow as tf
@@ -47,7 +47,7 @@ class Model(ABC2):
         """
 
 
-class SingleFrameModel(Model):
+class FrameAutoencoder(Model):
     """This model encodes a single frame.
 
     This is an autoencoder which encodes a single frame of the game.

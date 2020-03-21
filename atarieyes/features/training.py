@@ -34,7 +34,7 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.SingleFrameModel(
+        self.model = models.FrameAutoencoder(
             frame_shape=self.frame_shape,
             env_name=self.env.spec.id
         )

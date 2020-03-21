@@ -19,5 +19,5 @@ tensorforce = {editable = true,git = "https://github.com/tensorforce/tensorforce
 python_version = "3.7"
 
 [scripts]
-main = "python -m atarieyes"
+atarieyes = "python -m atarieyes"
 tensorboard = "tensorboard --logdir logs/"

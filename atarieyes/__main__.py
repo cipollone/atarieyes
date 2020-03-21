@@ -5,64 +5,82 @@
 import argparse
 import gym
 
-from atarieyes import training
-from atarieyes import selector
+import atarieyes.features.selector as features_selector
+import atarieyes.features.training as features_training
 
 
 def main():
     """Main function."""
 
     # Defaults
-    batch = 10
-    log_frequency = 20
-    learning_rate = 0.001
+    features_defaults = dict(
+        batch=10,
+        log_frequency=20,
+        learning_rate=0.001,
+    )
 
-    # Parsing arguments
     parser = argparse.ArgumentParser(
-        description="Feature extraction on Atari Games.")
-    op_parsers = parser.add_subparsers(help="Operation", dest="op")
+        description="Feature extraction and RL on Atari Games")
 
-    # List environment op
-    op_parsers.add_parser("list", help="List all environments.")
+    # Help: list environments?
+    class ListAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            print(_environment_names())
+            exit()
+    parser.add_argument(
+        "--list", action=ListAction, nargs=0,
+        help="List all environments, then exit")
 
-    # Train op
-    train_parser = op_parsers.add_parser(
+    what_parsers = parser.add_subparsers(dest="what", help="Choose group")
+
+    # RL agent op
+    what_parsers.add_parser(
+        "agent", help="Reinforcement Learning agent.")
+
+    # Features op
+    features_parser = what_parsers.add_parser(
+        "features", help="Features extraction.")
+    features_op = features_parser.add_subparsers(dest="op", help="What to do")
+
+    # Features training op
+    features_train = features_op.add_parser(
         "train", help="Train the feature extractor.")
 
-    train_parser.add_argument(
+    features_train.add_argument(
         "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
-    train_parser.add_argument(
+    features_train.add_argument(
         "--render", action="store_true", help="Render while training.")
-    train_parser.add_argument(
-        "-b", "--batch", type=int, default=batch, help="Training batch size.")
-    train_parser.add_argument(
-        "-l", "--logs", type=int, default=log_frequency,
+    features_train.add_argument(
+        "-b", "--batch", type=int, default=features_defaults["batch"],
+        help="Training batch size.")
+    features_train.add_argument(
+        "-l", "--logs", type=int, default=features_defaults["log_frequency"],
         help="Save logs after this number of batches")
-    train_parser.add_argument(
+    features_train.add_argument(
         "-c", "--continue", action="store_true", dest="cont",
         help="Continue from previous training.")
-    train_parser.add_argument(
-        "-r", "--rate", type=float, default=learning_rate,
+    features_train.add_argument(
+        "-r", "--rate", type=float, default=features_defaults["learning_rate"],
         help="Learning rate of the Adam optimizer.")
 
     # Feature selection op
-    feature_parser = op_parsers.add_parser(
+    feature_select = features_op.add_parser(
         "select", help="Explicit selection of local features")
-    feature_parser.add_argument(
-        "-e", "--env", type=_gym_environment_arg,
+    feature_select.add_argument(
+        "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
 
     args = parser.parse_args()
 
     # Go
-    if args.op == "list":
-        print(_environment_names())
-        return
-    elif args.op == "select":
-        selector.selection_tool(args)
-    elif args.op == "train":
-        training.Trainer(args).train()
+    if args.what == "agent":
+        raise NotImplementedError
+    elif args.what == "features":
+        if args.op == "select":
+            features_selector.selection_tool(args)
+        elif args.op == "train":
+            features_training.Trainer(args).train()
 
 
 def _environment_names():
