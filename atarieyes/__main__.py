@@ -5,10 +5,6 @@
 import argparse
 import gym
 
-import atarieyes.features.selector as features_selector
-import atarieyes.features.training as features_training
-import atarieyes.agent.training as agent_training
-
 
 def main():
     """Main function."""
@@ -23,6 +19,8 @@ def main():
         batch=10,
         log_frequency=1,
         learning_rate=1e-3,
+        memory=1000,
+        discount=1,
     )
 
     parser = argparse.ArgumentParser(
@@ -42,8 +40,11 @@ def main():
     # RL agent
     agent_train = what_parsers.add_parser(
         "agent", help="Reinforcement Learning agent")
+    agent_op = agent_train.add_subparsers(dest="op", help="What to do")
 
-    # Training op by default
+    # Agent training op
+    agent_train = agent_op.add_parser("train", help="Train the RL agent")
+
     agent_train.add_argument(
         "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
@@ -51,11 +52,17 @@ def main():
         "-r", "--rate", type=float, default=agent_defaults["learning_rate"],
         help="Learning rate")
     agent_train.add_argument(
-        "-b", "--batch", type=int, default=features_defaults["batch"],
+        "-b", "--batch", type=int, default=agent_defaults["batch"],
         help="Training batch size")
     agent_train.add_argument(
-        "-l", "--logs", type=int, default=features_defaults["log_frequency"],
+        "-l", "--logs", type=int, default=agent_defaults["log_frequency"],
         help="Save logs after this number of episodes")
+    agent_train.add_argument(
+        "-m", "--memory", type=int, default=agent_defaults["memory"],
+        help="Tensorforce agent memory")
+    agent_train.add_argument(
+        "-d", "--discount", type=int, default=agent_defaults["discount"],
+        help="RL discount factor")
     
     # Features
     features_parser = what_parsers.add_parser(
@@ -95,12 +102,19 @@ def main():
 
     # Go
     if args.what == "agent":
-        agent_training.Trainer(args).train()
+        if args.op == "train":
+            import atarieyes.agent.training as agent_training
+            agent_training.Trainer(args).train()
     elif args.what == "features":
-        if args.op == "select":
-            features_selector.selection_tool(args)
-        elif args.op == "train":
+        if args.op == "train":
+            import atarieyes.features.training as features_training
             features_training.Trainer(args).train()
+        elif args.op == "select":
+            import atarieyes.features.selector as features_selector
+            features_selector.selection_tool(args)
+
+    # ^ imports are here because Tensorforce startup settings for TensorFlow
+    #   are not compatible with mine.
 
 
 def _environment_names():

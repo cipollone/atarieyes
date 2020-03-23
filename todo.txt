@@ -1,8 +1,9 @@
 Things TODO:
-- Debug why iter(dataset) in features.train is now a problem?
-- Write a training file
-- Reorganize directories per environment per agent/features
+- Save and load agent
+- Save logs
+- Commit
 - Train on the server
+
 - Streaming frames in streaming.py
 
 - Divide models and logs per env

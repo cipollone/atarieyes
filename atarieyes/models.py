@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from atarieyes import layers
 from atarieyes.layers import BaseLayer
-from atarieyes.tools import ABC2, AbstractAttribute
+from atarieyes.pytools import ABC2, AbstractAttribute
 
 
 class Model(ABC2):

@@ -5,6 +5,8 @@ from tensorforce.environments import Environment
 from tensorforce.agents import Agent
 from tensorforce.execution import Runner
 
+from atarieyes import tftools
+
 
 class Trainer:
     """Train a RL agent on the atari games with TensorForce."""
@@ -16,20 +18,27 @@ class Trainer:
         """
 
         # Store
-        self.env_name = args.env
-        self.learning_rate = args.rate
         self.log_frequency = args.logs
-        self.batch = args.batch
+        self.discount = args.discount
+
+        env_name = args.env
+        learning_rate = args.rate
+        batch = args.batch
+        memory = args.memory
+
+        # Dirs
+        self.model_path, self.log_path = tftools.prepare_directories(
+            "agent", args.env, resuming=False)
 
         # TensorForce Env
         self.env = Environment.create(
-            environment="gym", level=self.env_name, max_episode_steps=1000
+            environment="gym", level=env_name, max_episode_steps=1000
         )
 
         # TensorForce Agent
         self.agent = Agent.create(
-            agent="dqn", environment=self.env, batch_size=self.batch,
-            learning_rate=self.learning_rate, memory=1050,
+            agent="dqn", environment=self.env, batch_size=batch,
+            learning_rate=learning_rate, memory=memory + batch
         )
 
     def train(self):
@@ -37,19 +46,21 @@ class Trainer:
 
         # Init
         episode = 0
-        metrics = "metrics"   # TODO: remove and add valuation function
 
         # Training loop
         print("> Training")
         while True:
 
-            # Do
-            self.train_episode()
+            # Do TODO
+            #self.train_episode()
 
             # Logs and savings
             if episode % self.log_frequency == 0:
 
-                print("Episode ", episode, ", ", metrics, sep="", end="    \r")
+                cumulative_reward = self.valuate_episode()
+                print("Episode ", episode, ", reward ", cumulative_reward,
+                    sep="", end="    \r")
+                # TODO: log and save
 
             episode += 1
 
@@ -71,3 +82,33 @@ class Trainer:
 
             # Learn
             self.agent.observe(terminal=terminal, reward=reward)
+
+    def valuate_episode(self):
+        """Valuation on a single episode.
+        
+        :return: cumulative discounted reward.
+        """
+
+        # Init episode
+        state = self.env.reset()
+        internals = self.agent.initial_internals()
+        terminal = False
+
+        cumulative = 0
+        discount_i = 1
+
+        # Iterate steps
+        while not terminal:
+
+            # Agent's turn
+            action, internals = self.agent.act(
+                states=state, internals=internals, evaluation=True)
+
+            # Environment's turn
+            state, terminal, reward = self.env.execute(actions=action)
+
+            # Learn
+            cumulative = reward * discount_i
+            discount_i *= self.discount
+
+        return cumulative
