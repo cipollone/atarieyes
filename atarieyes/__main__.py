@@ -17,10 +17,11 @@ def main():
     )
     agent_defaults = dict(
         batch=10,
-        log_frequency=1,
+        log_frequency=100,
+        save_frequency=5,
         learning_rate=1e-3,
-        memory=1000,
-        discount=1,
+        discount=1.0,
+        episode_steps=1000,
     )
 
     parser = argparse.ArgumentParser(
@@ -55,15 +56,24 @@ def main():
         "-b", "--batch", type=int, default=agent_defaults["batch"],
         help="Training batch size")
     agent_train.add_argument(
-        "-l", "--logs", type=int, default=agent_defaults["log_frequency"],
-        help="Save logs after this number of episodes")
+        "-l", "--log_frequency", type=int,
+        default=agent_defaults["log_frequency"],
+        help="Save TensorBorad after this number of STEPS")
     agent_train.add_argument(
-        "-m", "--memory", type=int, default=agent_defaults["memory"],
-        help="Tensorforce agent memory")
+        "-s", "--save_frequency", type=int,
+        default=agent_defaults["save_frequency"],
+        help="Save weights after this number of EPISODES")
     agent_train.add_argument(
-        "-d", "--discount", type=int, default=agent_defaults["discount"],
+        "-M", "--max_episode_steps", type=int,
+        default=agent_defaults["episode_steps"],
+        help="Max length of each episode. Note: this also affects memory.")
+    agent_train.add_argument(
+        "-d", "--discount", type=float, default=agent_defaults["discount"],
         help="RL discount factor")
-    
+    agent_train.add_argument(
+        "-c", "--continue", action="store_true", dest="cont",
+        help="Continue from previous training")
+
     # Features
     features_parser = what_parsers.add_parser(
         "features", help="Features extraction")

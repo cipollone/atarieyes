@@ -1,9 +1,6 @@
 """This module allows to train a feature extractor."""
 
-import os
-import shutil
 import gym
-import numpy as np
 import tensorflow as tf
 
 from atarieyes import models
@@ -47,7 +44,7 @@ class Trainer:
         self.optimizer = tf.optimizers.Adam(args.rate)
 
         # Tools
-        self.saver = CheckpointSaver(self.model.keras, model_path)
+        self.saver = CheckpointSaver(self.model.keras, model_path, "keras")
         self.logger = TensorBoardLogger(self.model.keras, log_path)
 
     def train(self):
@@ -59,7 +56,7 @@ class Trainer:
             step = 0
         # Restore
         else:
-            step = self.saver.load(self.frame_shape)
+            step = self.saver.load()
             print("> Weights restored.")
 
             # Initial valuation

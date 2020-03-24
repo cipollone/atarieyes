@@ -1,12 +1,8 @@
 Things TODO:
-- Save and load agent
-- Save logs
-- Commit
 - Train on the server
 
 - Streaming frames in streaming.py
 
-- Divide models and logs per env
 - collect training samples during reinforcement learning
 - Batch, instance normalization?
 - improve initizazion

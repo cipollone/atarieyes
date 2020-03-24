@@ -57,6 +57,10 @@ class TensorBoardLogger:
         :param path: directory where logs should be saved.
         """
 
+        # Check
+        if not tf.executing_eagerly():
+            raise TypeError("Not supported in graph mode.")
+
         self.path = path
         self.model = model
         self.summary_writer = tf.summary.create_file_writer(path)
@@ -88,6 +92,7 @@ class TensorBoardLogger:
         :param metrics: a dict of (name: value)
         """
 
+        # Save
         with self.summary_writer.as_default():
             for name, value in metrics.items():
                 tf.summary.scalar(name, value, step=step)
@@ -100,6 +105,7 @@ class TensorBoardLogger:
             of each group is displayed.
         """
 
+        # Save
         with self.summary_writer.as_default():
             for name, batch in images.items():
                 image = batch[0]
@@ -110,16 +116,25 @@ class TensorBoardLogger:
 class CheckpointSaver:
     """Save weights and restore."""
 
-    def __init__(self, model, path):
+    def __init__(self, model, path, model_type):
         """Initialize.
 
-        :param model: the Keras model that will be saves.
+        :param model: a model that will be saved.
         :param path: directory where checkpoints should be saved.
+        :param model_type: "keras", or "tensorforce" (if model is a tensorforce
+            agent).
         """
 
-        self.save_path = os.path.join(path, model.name)
+        # Check
+        if model_type not in ("keras", "tensorforce"):
+            raise ValueError("Invalid model type")
+
+        # Store
+        self.save_path = (
+            os.path.join(path, model.name) if model_type == "keras" else path)
         self.counters_path = os.path.join(path, "counters.txt")
         self.model = model
+        self.model_type = model_type
         self.score = float("-inf")
 
     def save(self, step, score=None):
@@ -138,29 +153,41 @@ class CheckpointSaver:
             else:
                 self.score = score
 
-        # Save
-        self.model.save_weights(
-            self.save_path, overwrite=True, save_format="tf")
+        # Save step
         with open(self.counters_path, "w") as f:
             f.write("step: " + str(step))
+
+        # Save model
+        if self.model_type == "keras":
+            self.model.save_weights(
+                self.save_path, overwrite=True, save_format="tf")
+        else:
+            self.model.save(
+                directory=self.save_path, filename="agent",
+                format="tensorflow")
         return True
 
-    def load(self, input_shape):
+    def load(self, env=None):
         """Restore weights from the previous checkpoint.
 
-        NOTE: optimizer state is not restored.
-
-        :param input_shape: shape of the input tensors (without batch).
-            This is used to initialize the optimizer before restoring.
+        :param env: TensorForce environment, required only for
+            tensorforce models.
         :return: the step of the saved weights
         """
 
-        # Restore
-        self.model.load_weights(self.save_path)
-
-        # Step
+        # Load step
         with open(self.counters_path) as f:
             counters = f.read()
         step = int(counters.split(":")[1])
+
+        # Load weights
+        if self.model_type == "keras":
+            self.model.load_weights(self.save_path)
+        else:
+            if env is None:
+                raise TypeError("A TensorForce environment is required.")
+            self.model.load(
+                directory=self.save_path, filename="agent",
+                format="tensorflow", environment=env)
 
         return step

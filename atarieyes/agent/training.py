@@ -1,11 +1,10 @@
 """This module allows to train a RL agent."""
 
-import gym
 from tensorforce.environments import Environment
 from tensorforce.agents import Agent
-from tensorforce.execution import Runner
 
 from atarieyes import tftools
+from atarieyes.tftools import CheckpointSaver
 
 
 class Trainer:
@@ -18,49 +17,64 @@ class Trainer:
         """
 
         # Store
-        self.log_frequency = args.logs
+        self.save_frequency = args.save_frequency
         self.discount = args.discount
-
-        env_name = args.env
-        learning_rate = args.rate
-        batch = args.batch
-        memory = args.memory
+        self.cont = args.cont
 
         # Dirs
-        self.model_path, self.log_path = tftools.prepare_directories(
-            "agent", args.env, resuming=False)
+        model_path, log_path = tftools.prepare_directories(
+            "agent", args.env, resuming=self.cont)
 
         # TensorForce Env
         self.env = Environment.create(
-            environment="gym", level=env_name, max_episode_steps=1000
+            environment="gym", level=args.env,
+            max_episode_steps=args.max_episode_steps
         )
 
         # TensorForce Agent
         self.agent = Agent.create(
-            agent="dqn", environment=self.env, batch_size=batch,
-            learning_rate=learning_rate, memory=memory + batch
+            agent="dqn", environment=self.env, batch_size=args.batch,
+            discount=self.discount, learning_rate=args.rate,
+            memory=args.max_episode_steps + args.batch,
+            summarizer={
+                "directory": log_path, "frequency": args.log_frequency,
+                "max-summaries": 1, "labels": ["rewards"]
+            }
         )
+
+        # Tools
+        self.saver = CheckpointSaver(
+            self.agent, model_path, model_type="tensorforce")
 
     def train(self):
         """Train."""
 
-        # Init
-        episode = 0
+        # New run
+        if not self.cont:
+            episode = 0
+        # Restore
+        else:
+            episode = self.saver.load(env=self.env)
+            print("> Weights restored.")
+
+            # Initial valuation
+            self.valuate(episode)
+            episode += 1
 
         # Training loop
         print("> Training")
         while True:
 
-            # Do TODO
-            #self.train_episode()
+            # Do
+            self.train_episode()
 
-            # Logs and savings
-            if episode % self.log_frequency == 0:
+            # Periodic savings
+            if episode % self.save_frequency == 0:
 
-                cumulative_reward = self.valuate_episode()
-                print("Episode ", episode, ", reward ", cumulative_reward,
-                    sep="", end="    \r")
-                # TODO: log and save
+                metrics = self.valuate()
+                self.saver.save(episode, score=metrics["return"])
+                print("Episode ", episode, ", metrics: ", metrics,
+                      sep="", end="          \r")
 
             episode += 1
 
@@ -83,10 +97,11 @@ class Trainer:
             # Learn
             self.agent.observe(terminal=terminal, reward=reward)
 
-    def valuate_episode(self):
-        """Valuation on a single episode.
-        
-        :return: cumulative discounted reward.
+    def valuate(self):
+        """Valuate (on a single episode).
+
+        :return: A dictionary of metrics that includes "return"
+            (the cumulative discounted reward)
         """
 
         # Init episode
@@ -111,4 +126,6 @@ class Trainer:
             cumulative = reward * discount_i
             discount_i *= self.discount
 
-        return cumulative
+        # Metrics
+        metrics = {"return": cumulative}
+        return metrics
