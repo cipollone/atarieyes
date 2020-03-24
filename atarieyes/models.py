@@ -1,11 +1,11 @@
-"""Neural networks for feature extraction."""
+"""Definitions for all models."""
 
 from abc import abstractmethod
 import tensorflow as tf
 
 from atarieyes import layers
 from atarieyes.layers import BaseLayer
-from atarieyes.tools import ABC2, AbstractAttribute
+from atarieyes.pytools import ABC2, AbstractAttribute
 
 
 class Model(ABC2):
@@ -47,7 +47,7 @@ class Model(ABC2):
         """
 
 
-class SingleFrameModel(Model):
+class FrameAutoencoder(Model):
     """This model encodes a single frame.
 
     This is an autoencoder which encodes a single frame of the game.

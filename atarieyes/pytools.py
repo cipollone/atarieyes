@@ -1,4 +1,4 @@
-"""Generic utilities."""
+"""Python utilities."""
 
 from abc import ABCMeta
 
