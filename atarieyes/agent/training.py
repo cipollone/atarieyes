@@ -23,7 +23,7 @@ class Trainer:
 
         # Dirs
         model_path, log_path = tftools.prepare_directories(
-            "agent", args.env, resuming=self.cont)
+            "agent", args.env, resuming=self.cont, args=args)
 
         # TensorForce Env
         self.env = Environment.create(

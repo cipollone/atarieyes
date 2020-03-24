@@ -21,7 +21,7 @@ class Trainer:
         self.log_frequency = args.logs
         self.cont = args.cont
         model_path, log_path = tftools.prepare_directories(
-            "features", args.env, resuming=self.cont)
+            "features", args.env, resuming=self.cont, args=args)
 
         # Environment
         self.env = gym.make(args.env)

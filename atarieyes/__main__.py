@@ -5,6 +5,8 @@
 import argparse
 import gym
 
+from atarieyes.tftools import ArgumentSaver
+
 
 def main():
     """Main function."""
@@ -32,9 +34,18 @@ def main():
         def __call__(self, parser, namespace, values, option_string=None):
             print(_environment_names())
             exit()
+
     parser.add_argument(
         "--list", action=ListAction, nargs=0,
         help="List all environments, then exit")
+    
+    # Load arguments from file
+    class LoadArguments(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            ArgumentSaver.load(values, namespace)
+
+    parser.add_argument(
+        "--from", action=LoadArguments, help="Load arguments from file")
 
     what_parsers = parser.add_subparsers(dest="what", help="Choose group")
 
