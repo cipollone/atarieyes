@@ -15,9 +15,6 @@ gym = {extras = ["atari"],version = "*"}
 tensorflow = "==2.1"
 tensorforce = {editable = true,git = "https://github.com/tensorforce/tensorforce.git",ref = "0.5.4"}
 
-[requires]
-python_version = "3.7"
-
 [scripts]
 atarieyes = "python -m atarieyes"
 tensorboard = "tensorboard --logdir logs/"
