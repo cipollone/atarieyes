@@ -1,4 +1,8 @@
 Things TODO:
+- Train on the server
+
+- Streaming frames in streaming.py
+
 - collect training samples during reinforcement learning
 - Batch, instance normalization?
 - improve initizazion
@@ -6,4 +10,4 @@ Things TODO:
 Things done:
 - Simple autoencoder
 - Focus on a part of the image
-- Pad reflection
+- Tensorforce for dqn

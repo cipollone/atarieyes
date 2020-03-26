@@ -5,64 +5,137 @@
 import argparse
 import gym
 
-from atarieyes import training
-from atarieyes import selector
+from atarieyes.tftools import ArgumentSaver
 
 
 def main():
     """Main function."""
 
     # Defaults
-    batch = 10
-    log_frequency = 20
-    learning_rate = 0.001
+    features_defaults = dict(
+        batch=10,
+        log_frequency=20,
+        learning_rate=1e-3,
+    )
+    agent_defaults = dict(
+        batch=10,
+        log_frequency=100,
+        save_frequency=5,
+        learning_rate=1e-3,
+        discount=1.0,
+        episode_steps=1000,
+    )
 
-    # Parsing arguments
     parser = argparse.ArgumentParser(
-        description="Feature extraction on Atari Games.")
-    op_parsers = parser.add_subparsers(help="Operation", dest="op")
+        description="Feature extraction and RL on Atari Games")
 
-    # List environment op
-    op_parsers.add_parser("list", help="List all environments.")
+    # Help: list environments?
+    class ListAction(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            print(_environment_names())
+            exit()
 
-    # Train op
-    train_parser = op_parsers.add_parser(
-        "train", help="Train the feature extractor.")
+    parser.add_argument(
+        "--list", action=ListAction, nargs=0,
+        help="List all environments, then exit")
+    
+    # Load arguments from file
+    class LoadArguments(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string=None):
+            ArgumentSaver.load(values, namespace)
 
-    train_parser.add_argument(
+    parser.add_argument(
+        "--from", action=LoadArguments, help="Load arguments from file")
+
+    what_parsers = parser.add_subparsers(dest="what", help="Choose group")
+
+    # RL agent
+    agent_train = what_parsers.add_parser(
+        "agent", help="Reinforcement Learning agent")
+    agent_op = agent_train.add_subparsers(dest="op", help="What to do")
+
+    # Agent training op
+    agent_train = agent_op.add_parser("train", help="Train the RL agent")
+
+    agent_train.add_argument(
         "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
-    train_parser.add_argument(
-        "--render", action="store_true", help="Render while training.")
-    train_parser.add_argument(
-        "-b", "--batch", type=int, default=batch, help="Training batch size.")
-    train_parser.add_argument(
-        "-l", "--logs", type=int, default=log_frequency,
-        help="Save logs after this number of batches")
-    train_parser.add_argument(
+    agent_train.add_argument(
+        "-r", "--rate", type=float, default=agent_defaults["learning_rate"],
+        help="Learning rate")
+    agent_train.add_argument(
+        "-b", "--batch", type=int, default=agent_defaults["batch"],
+        help="Training batch size")
+    agent_train.add_argument(
+        "-l", "--log_frequency", type=int,
+        default=agent_defaults["log_frequency"],
+        help="Save TensorBorad after this number of STEPS")
+    agent_train.add_argument(
+        "-s", "--save_frequency", type=int,
+        default=agent_defaults["save_frequency"],
+        help="Save weights after this number of EPISODES")
+    agent_train.add_argument(
+        "-M", "--max_episode_steps", type=int,
+        default=agent_defaults["episode_steps"],
+        help="Max length of each episode. Note: this also affects memory.")
+    agent_train.add_argument(
+        "-d", "--discount", type=float, default=agent_defaults["discount"],
+        help="RL discount factor")
+    agent_train.add_argument(
         "-c", "--continue", action="store_true", dest="cont",
-        help="Continue from previous training.")
-    train_parser.add_argument(
-        "-r", "--rate", type=float, default=learning_rate,
-        help="Learning rate of the Adam optimizer.")
+        help="Continue from previous training")
+
+    # Features
+    features_parser = what_parsers.add_parser(
+        "features", help="Features extraction")
+    features_op = features_parser.add_subparsers(dest="op", help="What to do")
+
+    # Features training op
+    features_train = features_op.add_parser(
+        "train", help="Train the feature extractor")
+
+    features_train.add_argument(
+        "-e", "--env", type=_gym_environment_arg, required=True,
+        help="Identifier of a Gym environment")
+    features_train.add_argument(
+        "--render", action="store_true", help="Render while training")
+    features_train.add_argument(
+        "-b", "--batch", type=int, default=features_defaults["batch"],
+        help="Training batch size")
+    features_train.add_argument(
+        "-l", "--logs", type=int, default=features_defaults["log_frequency"],
+        help="Save logs after this number of batches")
+    features_train.add_argument(
+        "-c", "--continue", action="store_true", dest="cont",
+        help="Continue from previous training")
+    features_train.add_argument(
+        "-r", "--rate", type=float, default=features_defaults["learning_rate"],
+        help="Learning rate")
 
     # Feature selection op
-    feature_parser = op_parsers.add_parser(
+    feature_select = features_op.add_parser(
         "select", help="Explicit selection of local features")
-    feature_parser.add_argument(
-        "-e", "--env", type=_gym_environment_arg,
+    feature_select.add_argument(
+        "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
 
     args = parser.parse_args()
 
     # Go
-    if args.op == "list":
-        print(_environment_names())
-        return
-    elif args.op == "select":
-        selector.selection_tool(args)
-    elif args.op == "train":
-        training.Trainer(args).train()
+    if args.what == "agent":
+        if args.op == "train":
+            import atarieyes.agent.training as agent_training
+            agent_training.Trainer(args).train()
+    elif args.what == "features":
+        if args.op == "train":
+            import atarieyes.features.training as features_training
+            features_training.Trainer(args).train()
+        elif args.op == "select":
+            import atarieyes.features.selector as features_selector
+            features_selector.selection_tool(args)
+
+    # ^ imports are here because Tensorforce startup settings for TensorFlow
+    #   are not compatible with mine.
 
 
 def _environment_names():

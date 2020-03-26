@@ -6,16 +6,15 @@ verify_ssl = true
 [dev-packages]
 ipython = "*"
 flake8 = "*"
+pipenv-setup = "*"
 
 [packages]
 opencv-python = "*"
 numpy = "*"
 gym = {extras = ["atari"],version = "*"}
-tensorflow = "~=2.1"
-
-[requires]
-python_version = "3.7"
+tensorflow = "==2.1"
+tensorforce = {editable = true,git = "https://github.com/tensorforce/tensorforce.git",ref = "0.5.4"}
 
 [scripts]
-main = "python -m atarieyes"
+atarieyes = "python -m atarieyes"
 tensorboard = "tensorboard --logdir logs/"

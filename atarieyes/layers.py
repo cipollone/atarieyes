@@ -6,7 +6,7 @@ import inspect
 import tensorflow as tf
 from tensorflow.keras import layers
 
-from atarieyes import selector
+from atarieyes.features import selector
 
 
 class BaseLayer(layers.Layer):
