@@ -24,8 +24,10 @@ apt-get -y upgrade
 RUN apt-get -y install python3-pip bash-completion tmux git \
 libsm6 libxrender-dev
 
-#RUN pip3 --no-cache-dir install ipython flake8 pipenv-setup \
-#opencv-python 
+RUN pip3 --no-cache-dir install -U wheel setuptools pip && \
+pip3 --no-cache-dir install -U ipython flake8 pipenv-setup \
+opencv-python numpy gym[atari] \
+-e git+https://github.com/tensorforce/tensorforce.git@0.5.4#egg=tensorforce
 
 USER ubuntu
 
