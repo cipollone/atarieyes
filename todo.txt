@@ -1,8 +1,12 @@
 Things TODO:
-- Train on the server
 
-- Streaming frames in streaming.py
+>Agent:
+- Player.play() to see how the agent behaves
+- Is the return working?
+- Streaming or saved frames
 
+>Features:
+- predict function to how the features work
 - collect training samples during reinforcement learning
 - Batch, instance normalization?
 - improve initizazion
@@ -11,3 +15,4 @@ Things done:
 - Simple autoencoder
 - Focus on a part of the image
 - Tensorforce for dqn
+- Trained features and agent on server

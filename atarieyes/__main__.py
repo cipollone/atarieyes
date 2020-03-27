@@ -18,7 +18,7 @@ def main():
         learning_rate=1e-3,
     )
     agent_defaults = dict(
-        batch=10,
+        batch=50,
         log_frequency=100,
         save_frequency=5,
         learning_rate=1e-3,

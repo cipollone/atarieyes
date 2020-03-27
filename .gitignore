@@ -1,9 +1,11 @@
 ## Project
 /logs/
 /models/
+/runs/
 
 ## Packaging
 *.egg-info/
+/Pipfile.lock
 /docker/src/
 
 ## Linux
