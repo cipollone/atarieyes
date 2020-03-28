@@ -52,4 +52,4 @@ class Player:
             episode += 1
 
             # Run
-            Trainer.run_episode(self, render=True)
+            Trainer.run_episode(self)

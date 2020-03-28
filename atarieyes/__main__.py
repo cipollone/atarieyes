@@ -24,6 +24,7 @@ def main():
         learning_rate=1e-3,
         discount=1.0,
         episode_steps=1000,
+        exploration_episodes=50,
     )
 
     parser = argparse.ArgumentParser(
@@ -67,15 +68,15 @@ def main():
         "-b", "--batch", type=int, default=agent_defaults["batch"],
         help="Training batch size")
     agent_train.add_argument(
-        "-l", "--log_frequency", type=int,
+        "-l", "--log-frequency", type=int,
         default=agent_defaults["log_frequency"],
         help="Save TensorBorad after this number of STEPS")
     agent_train.add_argument(
-        "-s", "--save_frequency", type=int,
+        "-s", "--save-frequency", type=int,
         default=agent_defaults["save_frequency"],
         help="Save weights after this number of EPISODES")
     agent_train.add_argument(
-        "-M", "--max_episode_steps", type=int,
+        "-M", "--max-episode_steps", type=int,
         default=agent_defaults["episode_steps"],
         help="Max length of each episode. Note: this also affects memory.")
     agent_train.add_argument(
@@ -86,6 +87,13 @@ def main():
         help="Continue from previous training")
     agent_train.add_argument(
         "--render", action="store_true", help="Render while training")
+    agent_train.add_argument(
+        "--no-validation", action="store_true",
+        help="Skip the validation step (useful with --render)")
+    agent_train.add_argument(
+        "--expl-episodes", type=int,
+        default=agent_defaults["exploration_episodes"],
+        help="Number of episodes after which exproration rate halves")
 
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
@@ -99,7 +107,7 @@ def main():
         "Usually under: models/agent/<env_name>/agent.json. "
         "Assuming the checkpoint is in the same directory.")
     agent_play.add_argument(
-        "-M", "--max_episode_steps", type=int,
+        "-M", "--max-episode_steps", type=int,
         default=agent_defaults["episode_steps"],
         help="Max length of each episode")
 

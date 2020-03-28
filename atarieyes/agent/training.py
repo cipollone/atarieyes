@@ -20,6 +20,7 @@ class Trainer:
         self.save_frequency = args.save_frequency
         self.discount = args.discount
         self.cont = args.cont
+        self.using_validation = not args.no_validation
 
         # Dirs
         model_path, log_path = tftools.prepare_directories(
@@ -38,10 +39,16 @@ class Trainer:
             agent="dqn", environment=self.env, batch_size=args.batch,
             discount=self.discount, learning_rate=args.rate,
             memory=args.max_episode_steps + args.batch,
+            exploration={
+                "type": "decaying",
+                "unit": "episodes", "decay": "exponential",
+                "initial_value": 0.8, "decay_rate": 0.5,
+                "decay_steps": args.expl_episodes, "staircase": True,
+            },
             summarizer={
                 "directory": log_path, "frequency": args.log_frequency,
-                "max-summaries": 1, "labels": ["rewards"]
-            }
+                "labels": ["graph", "losses", "rewards"],
+            },
         )
 
         # Tools
@@ -50,6 +57,10 @@ class Trainer:
 
     def train(self):
         """Train."""
+
+        # Init
+        metrics = None
+        score = None
 
         # New run
         if not self.cont:
@@ -60,8 +71,9 @@ class Trainer:
             print("> Weights restored.")
 
             # Initial valuation
-            metrics = self.run_episode()
-            print("Initial metrics:", metrics)
+            if self.using_validation:
+                metrics = self.run_episode()
+                print("Initial metrics:", metrics)
             episode += 1
 
         # Training loop
@@ -74,8 +86,11 @@ class Trainer:
             # Periodic savings
             if episode % self.save_frequency == 0:
 
-                metrics = self.run_episode()
-                self.saver.save(episode, score=metrics["return"])
+                if self.using_validation:
+                    metrics = self.run_episode()
+                    score = metrics["return"]
+
+                self.saver.save(episode, score=score)
                 print("Episode ", episode, ", metrics: ", metrics,
                       sep="", end="          \r")
 

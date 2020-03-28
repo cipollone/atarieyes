@@ -1,10 +1,8 @@
 Things TODO:
 
 >Agent:
-- Debug bad training: the agent is not exploring
-	- Look at the rewards. Are they alaways 0?
-	- Stream environment frames to check training and
-		to record
+- Retrain on the server and see if it works
+- Prepare tools to stream frames
 
 >Features:
 - predict function to how the features work
@@ -14,7 +12,11 @@ Things TODO:
 
 Things done:
 - Simple autoencoder
-- Focus on a part of the image
-- Tensorforce for dqn
+- Crop the game board to the relevant part
+- Tensorforce for DQN
 - Trained features and agent on server
 - Player.play()
+- Decaying exploration rate
+
+Notes:
+- In breakout, rewards are given at each brocken brick 
