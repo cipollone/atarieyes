@@ -30,6 +30,8 @@ class Trainer:
             environment="gym", level=args.env,
             max_episode_steps=args.max_episode_steps
         )
+        if args.render:
+            self.env.visualize = True
 
         # TensorForce Agent
         self.agent = Agent.create(
@@ -58,7 +60,8 @@ class Trainer:
             print("> Weights restored.")
 
             # Initial valuation
-            self.valuate(episode)
+            metrics = self.run_episode()
+            print("Initial metrics:", metrics)
             episode += 1
 
         # Training loop
@@ -71,7 +74,7 @@ class Trainer:
             # Periodic savings
             if episode % self.save_frequency == 0:
 
-                metrics = self.valuate()
+                metrics = self.run_episode()
                 self.saver.save(episode, score=metrics["return"])
                 print("Episode ", episode, ", metrics: ", metrics,
                       sep="", end="          \r")
@@ -97,7 +100,7 @@ class Trainer:
             # Learn
             self.agent.observe(terminal=terminal, reward=reward)
 
-    def valuate(self):
+    def run_episode(self):
         """Valuate (on a single episode).
 
         :return: A dictionary of metrics that includes "return"
@@ -123,7 +126,7 @@ class Trainer:
             state, terminal, reward = self.env.execute(actions=action)
 
             # Learn
-            cumulative = reward * discount_i
+            cumulative += reward * discount_i
             discount_i *= self.discount
 
         # Metrics

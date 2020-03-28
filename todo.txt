@@ -1,9 +1,10 @@
 Things TODO:
 
 >Agent:
-- Player.play() to see how the agent behaves
-- Is the return working?
-- Streaming or saved frames
+- Debug bad training: the agent is not exploring
+	- Look at the rewards. Are they alaways 0?
+	- Stream environment frames to check training and
+		to record
 
 >Features:
 - predict function to how the features work
@@ -16,3 +17,4 @@ Things done:
 - Focus on a part of the image
 - Tensorforce for dqn
 - Trained features and agent on server
+- Player.play()

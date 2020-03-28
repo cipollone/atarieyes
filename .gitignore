@@ -1,6 +1,6 @@
 ## Project
-/logs/
-/models/
+/logs
+/models
 /runs/
 
 ## Packaging
