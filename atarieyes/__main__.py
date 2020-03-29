@@ -18,12 +18,13 @@ def main():
         learning_rate=1e-3,
     )
     agent_defaults = dict(
-        batch=50,
-        log_frequency=100,
+        batch=100,
+        log_frequency=50,
         save_frequency=5,
-        learning_rate=1e-3,
+        learning_rate=1e-4,
         discount=1.0,
         episode_steps=1000,
+        exploration_episodes=50,
     )
 
     parser = argparse.ArgumentParser(
@@ -38,7 +39,7 @@ def main():
     parser.add_argument(
         "--list", action=ListAction, nargs=0,
         help="List all environments, then exit")
-    
+
     # Load arguments from file
     class LoadArguments(argparse.Action):
         def __call__(self, parser, namespace, values, option_string=None):
@@ -54,7 +55,7 @@ def main():
         "agent", help="Reinforcement Learning agent")
     agent_op = agent_train.add_subparsers(dest="op", help="What to do")
 
-    # Agent training op
+    # Agent train op
     agent_train = agent_op.add_parser("train", help="Train the RL agent")
 
     agent_train.add_argument(
@@ -67,15 +68,15 @@ def main():
         "-b", "--batch", type=int, default=agent_defaults["batch"],
         help="Training batch size")
     agent_train.add_argument(
-        "-l", "--log_frequency", type=int,
+        "-l", "--log-frequency", type=int,
         default=agent_defaults["log_frequency"],
         help="Save TensorBorad after this number of STEPS")
     agent_train.add_argument(
-        "-s", "--save_frequency", type=int,
+        "-s", "--save-frequency", type=int,
         default=agent_defaults["save_frequency"],
         help="Save weights after this number of EPISODES")
     agent_train.add_argument(
-        "-M", "--max_episode_steps", type=int,
+        "-M", "--max-episode_steps", type=int,
         default=agent_defaults["episode_steps"],
         help="Max length of each episode. Note: this also affects memory.")
     agent_train.add_argument(
@@ -84,13 +85,38 @@ def main():
     agent_train.add_argument(
         "-c", "--continue", action="store_true", dest="cont",
         help="Continue from previous training")
+    agent_train.add_argument(
+        "--render", action="store_true", help="Render while training")
+    agent_train.add_argument(
+        "--no-validation", action="store_true",
+        help="Skip the validation step (useful with --render)")
+    agent_train.add_argument(
+        "--expl-episodes", type=int,
+        default=agent_defaults["exploration_episodes"],
+        help="Number of episodes after which exproration rate halves")
+
+    # Agent play op
+    agent_play = agent_op.add_parser("play", help="Show how the agent plays")
+
+    agent_play.add_argument(
+        "-e", "--env", type=_gym_environment_arg, required=True,
+        help="Identifier of a Gym environment")
+    agent_play.add_argument(
+        "-a", "--agent", type=str, required=True,
+        help="Trained agent json specification. "
+        "Usually under: models/agent/<env_name>/agent.json. "
+        "Assuming the checkpoint is in the same directory.")
+    agent_play.add_argument(
+        "-M", "--max-episode_steps", type=int,
+        default=agent_defaults["episode_steps"],
+        help="Max length of each episode")
 
     # Features
     features_parser = what_parsers.add_parser(
         "features", help="Features extraction")
     features_op = features_parser.add_subparsers(dest="op", help="What to do")
 
-    # Features training op
+    # Features train op
     features_train = features_op.add_parser(
         "train", help="Train the feature extractor")
 
@@ -126,6 +152,9 @@ def main():
         if args.op == "train":
             import atarieyes.agent.training as agent_training
             agent_training.Trainer(args).train()
+        elif args.op == "play":
+            import atarieyes.agent.playing as agent_playing
+            agent_playing.Player(args).play()
     elif args.what == "features":
         if args.op == "train":
             import atarieyes.features.training as features_training

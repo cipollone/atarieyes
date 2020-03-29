@@ -1,9 +1,8 @@
 Things TODO:
 
 >Agent:
-- Player.play() to see how the agent behaves
-- Is the return working?
-- Streaming or saved frames
+- Prepare tools to stream frames
+- Retrain on the server and see if it works
 
 >Features:
 - predict function to how the features work
@@ -13,6 +12,11 @@ Things TODO:
 
 Things done:
 - Simple autoencoder
-- Focus on a part of the image
-- Tensorforce for dqn
+- Crop the game board to the relevant part
+- Tensorforce for DQN
 - Trained features and agent on server
+- Player.play()
+- Decaying exploration rate
+
+Notes:
+- In breakout, rewards are given at each brocken brick 

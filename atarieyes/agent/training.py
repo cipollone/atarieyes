@@ -20,6 +20,7 @@ class Trainer:
         self.save_frequency = args.save_frequency
         self.discount = args.discount
         self.cont = args.cont
+        self.using_validation = not args.no_validation
 
         # Dirs
         model_path, log_path = tftools.prepare_directories(
@@ -30,16 +31,24 @@ class Trainer:
             environment="gym", level=args.env,
             max_episode_steps=args.max_episode_steps
         )
+        if args.render:
+            self.env.visualize = True
 
         # TensorForce Agent
         self.agent = Agent.create(
             agent="dqn", environment=self.env, batch_size=args.batch,
             discount=self.discount, learning_rate=args.rate,
             memory=args.max_episode_steps + args.batch,
+            exploration={
+                "type": "decaying",
+                "unit": "episodes", "decay": "exponential",
+                "initial_value": 0.8, "decay_rate": 0.5,
+                "decay_steps": args.expl_episodes, "staircase": True,
+            },
             summarizer={
                 "directory": log_path, "frequency": args.log_frequency,
-                "max-summaries": 1, "labels": ["rewards"]
-            }
+                "labels": ["graph", "losses", "rewards"],
+            },
         )
 
         # Tools
@@ -48,6 +57,10 @@ class Trainer:
 
     def train(self):
         """Train."""
+
+        # Init
+        metrics = None
+        score = None
 
         # New run
         if not self.cont:
@@ -58,7 +71,9 @@ class Trainer:
             print("> Weights restored.")
 
             # Initial valuation
-            self.valuate(episode)
+            if self.using_validation:
+                metrics = self.run_episode()
+                print("Initial metrics:", metrics)
             episode += 1
 
         # Training loop
@@ -71,8 +86,11 @@ class Trainer:
             # Periodic savings
             if episode % self.save_frequency == 0:
 
-                metrics = self.valuate()
-                self.saver.save(episode, score=metrics["return"])
+                if self.using_validation:
+                    metrics = self.run_episode()
+                    score = metrics["return"]
+
+                self.saver.save(episode, score=score)
                 print("Episode ", episode, ", metrics: ", metrics,
                       sep="", end="          \r")
 
@@ -97,7 +115,7 @@ class Trainer:
             # Learn
             self.agent.observe(terminal=terminal, reward=reward)
 
-    def valuate(self):
+    def run_episode(self):
         """Valuate (on a single episode).
 
         :return: A dictionary of metrics that includes "return"
@@ -123,7 +141,7 @@ class Trainer:
             state, terminal, reward = self.env.execute(actions=action)
 
             # Learn
-            cumulative = reward * discount_i
+            cumulative += reward * discount_i
             discount_i *= self.discount
 
         # Metrics
