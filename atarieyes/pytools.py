@@ -1,6 +1,7 @@
 """Python utilities."""
 
 from abc import ABCMeta
+import signal
 
 
 class ABCMeta2(ABCMeta):
@@ -53,3 +54,17 @@ class ABC2(metaclass=ABCMeta2):
 
     Use this class just like abc.ABC.
     """
+
+
+def ctrl_C_with(handler):
+    """Set a baviour when the Ctrl-C is pressed.
+
+    :param handler: a callable that is executed at SIGINT.
+        handler must accept two arguments: signal and frame.
+    """
+
+    def signal_handler(sig, frame):
+        handler(sig, frame)
+        exit()
+
+    signal.signal(signal.SIGINT, signal_handler)

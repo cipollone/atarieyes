@@ -21,6 +21,7 @@ class Trainer:
         self.discount = args.discount
         self.cont = args.cont
         self.using_validation = not args.no_validation
+        self.stream_address = args.stream
 
         # Dirs
         model_path, log_path = tftools.prepare_directories(
@@ -54,6 +55,10 @@ class Trainer:
         # Tools
         self.saver = CheckpointSaver(
             self.agent, model_path, model_type="tensorforce")
+
+        # Setup for streaming
+        if self.stream_address:
+            print(self.stream_address)  # TODO: remove placeholder
 
     def train(self):
         """Train."""
