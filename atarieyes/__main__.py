@@ -18,10 +18,10 @@ def main():
         learning_rate=1e-3,
     )
     agent_defaults = dict(
-        batch=50,
-        log_frequency=100,
+        batch=100,
+        log_frequency=50,
         save_frequency=5,
-        learning_rate=1e-3,
+        learning_rate=1e-4,
         discount=1.0,
         episode_steps=1000,
         exploration_episodes=50,

@@ -1,8 +1,8 @@
 Things TODO:
 
 >Agent:
-- Retrain on the server and see if it works
 - Prepare tools to stream frames
+- Retrain on the server and see if it works
 
 >Features:
 - predict function to how the features work
