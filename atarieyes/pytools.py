@@ -56,15 +56,35 @@ class ABC2(metaclass=ABCMeta2):
     """
 
 
-def ctrl_C_with(handler):
-    """Set a baviour when the Ctrl-C is pressed.
+class QuitWithResources:
+    """Close the resources when ctrl-c is pressed."""
 
-    :param handler: a callable that is executed at SIGINT.
-        handler must accept two arguments: signal and frame.
-    """
+    __handlers = []
+    __initialized = False
 
-    def signal_handler(sig, frame):
-        handler(sig, frame)
-        exit()
+    def __init__(self):
+        """Don't instantiate."""
 
-    signal.signal(signal.SIGINT, signal_handler)
+        raise TypeError("Don't instantiate this class")
+
+    @staticmethod
+    def close():
+        """Close all and quit."""
+
+        for handler in QuitWithResources.__handlers:
+            handler()
+        quit()
+
+    @staticmethod
+    def to_be_closed(handler):
+        """Declare a new resource to be closed.
+
+        :param handler: callable to be used when closing.
+        """
+
+        if not QuitWithResources.__initialized:
+            signal.signal(
+                signal.SIGINT, lambda sig, frame: QuitWithResources.close())
+            QuitWithResources.__initialized = True
+
+        QuitWithResources.__handlers.append(handler)
