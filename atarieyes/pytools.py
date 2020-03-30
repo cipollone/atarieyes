@@ -59,7 +59,7 @@ class ABC2(metaclass=ABCMeta2):
 class QuitWithResources:
     """Close the resources when ctrl-c is pressed."""
 
-    __handlers = []
+    __deleters = {}
     __initialized = False
 
     def __init__(self):
@@ -71,15 +71,16 @@ class QuitWithResources:
     def close():
         """Close all and quit."""
 
-        for handler in QuitWithResources.__handlers:
-            handler()
+        for name, deleter in QuitWithResources.__deleters.items():
+            deleter()
         quit()
 
     @staticmethod
-    def to_be_closed(handler):
+    def add(name, deleter):
         """Declare a new resource to be closed.
 
-        :param handler: callable to be used when closing.
+        :param name: any identifier for this resource.
+        :param deleter: callable to be used when closing.
         """
 
         if not QuitWithResources.__initialized:
@@ -87,4 +88,19 @@ class QuitWithResources:
                 signal.SIGINT, lambda sig, frame: QuitWithResources.close())
             QuitWithResources.__initialized = True
 
-        QuitWithResources.__handlers.append(handler)
+        if name in QuitWithResources.__deleters:
+            raise ValueError("This name is already used")
+
+        QuitWithResources.__deleters[name] = deleter
+
+    @staticmethod
+    def remove(name):
+        """Removes a resource.
+
+        :param name: identifier of a resource.
+        """
+
+        if name not in QuitWithResources.__deleters:
+            raise ValueError(str(name) + " is not a resource")
+
+        QuitWithResources.__deleters.pop(name)

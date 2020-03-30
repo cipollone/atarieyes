@@ -12,8 +12,9 @@ The same port must be used for both ends.
 import sys
 import queue
 import threading
+import time
 import socket
-import socketserver
+from socketserver import TCPServer, BaseRequestHandler
 
 # TODO: fix this import
 from pytools import QuitWithResources
@@ -44,8 +45,8 @@ class Sender:
         # Create connection
         ip, port = address.split(":")
         port = int(port)
-        socketserver.TCPServer.allow_reuse_address = True    # socket option
-        self.server = socketserver.TCPServer((ip, port), Sender.RequestHandler)
+        self.server = Sender.OneRequestTCPServer(
+            (ip, port), Sender.RequestHandler)
 
         # Data to send
         self._data_queue = queue.Queue()
@@ -54,17 +55,24 @@ class Sender:
     def start(self):
         """Start sending messages on queue."""
 
-        QuitWithResources.to_be_closed(self.server.server_close)
-        QuitWithResources.to_be_closed(lambda: print("\nSender closed"))
+        # Finally close
+        def close():
+            self.server.server_close()
+            print("\nSender closed")
+        QuitWithResources.add("sender", close)
 
         thread = threading.Thread(target=self.server.serve_forever)
         thread.daemon = True
         thread.start()
 
+        while not self.server.is_serving:
+            time.sleep(0.1)
+
     def send(self, data):
         """Send data asynchronously.
 
         :param data: binary data
+        :return: True if the data was correctly pushed to the sending queue
         """
 
         # Checks
@@ -72,11 +80,34 @@ class Sender:
             raise TypeError("Can only send bytes")
         if len(data) != self.MSG_LENGTH:
             raise ValueError("Message with the wrong length")
+        if not self.server.is_serving:
+            print("Broken connection", file=sys.stderr)
+            return False
 
         # Send
         self._data_queue.put_nowait(data)
+        return True
 
-    class RequestHandler(socketserver.BaseRequestHandler):
+    class OneRequestTCPServer(TCPServer):
+        """Restrict to only one connection."""
+
+        request_queue_size = 1
+        allow_reuse_address = True
+        is_serving = False
+
+        def handle_error(self, request, client_address):
+            """Stop the server on broken connection."""
+
+            self.server_close()
+            self.is_serving = False
+
+        def serve_forever(self):
+            """Forward."""
+
+            self.is_serving = True
+            TCPServer.serve_forever(self)
+
+    class RequestHandler(BaseRequestHandler):
         """This actually sends data to the client who requested."""
 
         def handle(self):
@@ -134,13 +165,12 @@ class Receiver:
 
 if __name__ == "__main__":
     # TODO: testing here. Delete when done
-    import sys
     if sys.argv[1] == "s":
         sender = Sender("localhost:30003", 10)
         sender.start()
-        while True:
-            sender.send(b"0113456789")
-            input()
+        while sender.send(b"0123456789"):
+            import code
+            code.interact(local=locals())
     elif sys.argv[1] == "r":
         receiver = Receiver("localhost:30003", 10)
         while True:
