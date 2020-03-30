@@ -16,13 +16,7 @@ import time
 import socket
 from socketserver import TCPServer, BaseRequestHandler
 
-# TODO: fix this import
-from pytools import QuitWithResources
-
-# TODO: multithreading for receiver
-# TODO: queue also in receiver
-# TODO: only push to queue if someone is listening
-# TODO: classes for frames
+from atarieyes.pytools import QuitWithResources
 
 
 class Sender:
@@ -134,33 +128,51 @@ class Receiver:
         ip, port = address.split(":")
         port = int(port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        # Start
         self.sock.connect((ip, port))
 
-    def read_wait(self):
-        """Wait and read for received data.
+        # Received data
+        self._data_queue = queue.Queue()
 
-        :return: Returns a binary message when available.
+    def start(self):
+        """Start receiving messages to a queue."""
+
+        thread = threading.Thread(target=self._always_receive)
+        thread.daemon = True
+        thread.start()
+        self.receiving_thread = thread
+
+    def _always_receive(self):
+        """Continuously receive data; internal use."""
+
+        while True:
+
+            # Receive a complete message
+            chunks = []
+            remaining_bytes = self.MSG_LENGTH
+            while remaining_bytes > 0:
+
+                # Read
+                chunk = self.sock.recv(min(remaining_bytes, 2048))
+                if chunk == b"":
+                    print("Closed", file=sys.stderr)
+                    self._data_queue.put_nowait(None)
+                    return
+                chunks.append(chunk)
+
+                remaining_bytes -= len(chunk)
+
+            # Return
+            msg = b"".join(chunks)
+            self._data_queue.put_nowait(msg)
+
+    def get_wait(self):
+        """Waits until a complete message is received.
+
+        :return: a bytes object containing the message or None at
+            the end of transmission
         """
 
-        # Read an entire message
-        chunks = []
-        remaining_bytes = self.MSG_LENGTH
-        while remaining_bytes > 0:
-
-            # Read
-            chunk = self.sock.recv(min(remaining_bytes, 2048))
-            if chunk == b"":
-                print("Closed", file=sys.stderr)
-                quit()
-            chunks.append(chunk)
-
-            remaining_bytes -= len(chunk)
-
-        # Return
-        msg = b"".join(chunks)
-        return msg
+        return self._data_queue.get(block=True, timeout=None)
 
 
 if __name__ == "__main__":
@@ -169,9 +181,11 @@ if __name__ == "__main__":
         sender = Sender("localhost:30003", 10)
         sender.start()
         while sender.send(b"0123456789"):
-            import code
-            code.interact(local=locals())
+            input()
     elif sys.argv[1] == "r":
         receiver = Receiver("localhost:30003", 10)
-        while True:
-            print(receiver.read_wait())
+        receiver.start()
+        msg = True
+        while msg:
+            msg = receiver.get_wait()
+            print(msg)

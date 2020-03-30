@@ -1,7 +1,7 @@
 Things TODO:
 
 >Agent:
-- Prepare tools to stream frames
+- Classes in streaming specific to frames
 - Retrain on the server and see if it works
 
 >Features:
