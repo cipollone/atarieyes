@@ -97,7 +97,7 @@ def main():
     agent_train.add_argument(
         "--stream", type=str,
         help="Generate a stream of frames and send them to this address")
-    # TODO: missing receiving side from features
+    # TODO: only ip. missing receiving side from features
 
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")

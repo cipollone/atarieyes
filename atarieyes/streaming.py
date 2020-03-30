@@ -15,8 +15,13 @@ import threading
 import time
 import socket
 from socketserver import TCPServer, BaseRequestHandler
+import gym
 
 from atarieyes.pytools import QuitWithResources
+
+
+# Port used for streaming frames
+app_port = 30003
 
 
 class Sender:
@@ -75,7 +80,6 @@ class Sender:
         if len(data) != self.MSG_LENGTH:
             raise ValueError("Message with the wrong length")
         if not self.server.is_serving:
-            print("Broken connection", file=sys.stderr)
             return False
 
         # Send
@@ -92,6 +96,7 @@ class Sender:
         def handle_error(self, request, client_address):
             """Stop the server on broken connection."""
 
+            print("Broken connection", file=sys.stderr)
             self.server_close()
             self.is_serving = False
 
@@ -175,17 +180,80 @@ class Receiver:
         return self._data_queue.get(block=True, timeout=None)
 
 
+class AtariFramesSender(Sender):
+    """Transmitter class for frames of Atari games."""
+
+    def __init__(self, env_name, ip):
+        """Initialize.
+
+        :param env_name: a gym environment name
+        :param ip: destination ip address (str)
+        """
+
+        # Discover frame shape
+        env = gym.make(env_name)
+        frame = env.observation_space.sample()
+        size = len(frame.tobytes())
+
+        address = ip + ":" + str(app_port)
+
+        # Super
+        Sender.__init__(self, address, size)
+
+        # Start
+        self.start()
+
+    def send(self, frame):
+        """Send a frame.
+
+        :param data: a numpy array
+        :return: True if the data was correctly pushed to the sending queue
+        """
+
+        Sender.send(self, frame.tobytes())
+
+
+class AtariFramesReceiver(Receiver):
+    """Receiver class for frames of Atari games."""
+
+    def __init__(self, env_name, ip):
+        """Initialize.
+
+        :param env_name: a gym environment name
+        :param ip: source ip address (str)
+        """
+
+        # Discover frame shape
+        env = gym.make(env_name)
+        frame = env.observation_space.sample()
+        size = len(frame.tobytes())
+
+        address = ip + ":" + str(app_port)
+
+        # Super
+        Receiver.__init__(self, address, size)
+
+        # Start
+        self.start()
+
+
 if __name__ == "__main__":
     # TODO: testing here. Delete when done
+
     if sys.argv[1] == "s":
-        sender = Sender("localhost:30003", 10)
-        sender.start()
-        while sender.send(b"0123456789"):
+        sender = AtariFramesSender("Breakout-v4", "localhost")
+        env = gym.make("Breakout-v4")
+        run = True
+        frame = env.reset()
+        while run:
+            sender.send(frame)
             input()
+            frame, _, _, _ = env.step(env.action_space.sample())
+
     elif sys.argv[1] == "r":
-        receiver = Receiver("localhost:30003", 10)
-        receiver.start()
-        msg = True
-        while msg:
+        receiver = AtariFramesReceiver("Breakout-v4", "localhost")
+        while True:
             msg = receiver.get_wait()
-            print(msg)
+            if msg is None:
+                break
+            print(len(msg))
