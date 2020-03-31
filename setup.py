@@ -1,7 +1,7 @@
 # flake8: noqa
 # Because this is processed with Black
 
-from setuptools import setup, find_packages
+from setuptools import setup, find_namespace_packages
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -19,7 +19,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/cipollone/atarieyes",
-    packages=find_packages(include=["atarieyes"]),
+    packages=find_namespace_packages(include=["atarieyes*"]),
     classifiers=["Programming Language :: Python :: 3",],
     python_requires="~=3.6",
 )

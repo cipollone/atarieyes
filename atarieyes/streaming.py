@@ -16,6 +16,8 @@ import time
 import socket
 from socketserver import TCPServer, BaseRequestHandler
 import gym
+import numpy as np
+import cv2
 
 from atarieyes.pytools import QuitWithResources
 
@@ -32,20 +34,17 @@ class Sender:
     program terminates with a Ctrl-C, as often happens in long trainings.
     """
 
-    def __init__(self, address, msg_length):
+    def __init__(self, msg_length):
         """Initialize.
 
-        :param address: ip address of the stream
         :param msg_length: the fixed length of messages (bytes)
         """
 
         self.MSG_LENGTH = msg_length
 
         # Create connection
-        ip, port = address.split(":")
-        port = int(port)
         self.server = Sender.OneRequestTCPServer(
-            (ip, port), Sender.RequestHandler)
+            (socket.gethostname(), app_port), Sender.RequestHandler)
 
         # Data to send
         self._data_queue = queue.Queue()
@@ -114,26 +113,28 @@ class Sender:
 
             while True:
                 data = self.server._data_queue.get(block=True, timeout=None)
-                self.request.sendall(data)
+                try:
+                    self.request.sendall(data)
+
+                except ConnectionError:
+                    break
 
 
 class Receiver:
     """Generic receiver class."""
 
-    def __init__(self, address, msg_length):
+    def __init__(self, msg_length, ip):
         """Initialize.
 
-        :param address: ip address of the stream
         :param msg_length: the fixed length of messages (bytes)
+        :param ip: ip address of the sender
         """
 
         self.MSG_LENGTH = msg_length
 
         # Create connection
-        ip, port = address.split(":")
-        port = int(port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((ip, port))
+        self.sock.connect((ip, app_port))
 
         # Received data
         self._data_queue = queue.Queue()
@@ -183,25 +184,26 @@ class Receiver:
 class AtariFramesSender(Sender):
     """Transmitter class for frames of Atari games."""
 
-    def __init__(self, env_name, ip):
+    def __init__(self, env_name):
         """Initialize.
 
         :param env_name: a gym environment name
-        :param ip: destination ip address (str)
         """
 
         # Discover frame shape
         env = gym.make(env_name)
         frame = env.observation_space.sample()
+        assert frame.dtype == np.uint8
         size = len(frame.tobytes())
 
-        address = ip + ":" + str(app_port)
-
         # Super
-        Sender.__init__(self, address, size)
+        Sender.__init__(self, size)
 
         # Start
         self.start()
+        print("> Serving frames on", self.server.server_address, end="")
+        print("  (pause)", end="")
+        input()   # 
 
     def send(self, frame):
         """Send a frame.
@@ -227,21 +229,58 @@ class AtariFramesReceiver(Receiver):
         env = gym.make(env_name)
         frame = env.observation_space.sample()
         size = len(frame.tobytes())
-
-        address = ip + ":" + str(app_port)
+        self.frame_shape = frame.shape
 
         # Super
-        Receiver.__init__(self, address, size)
+        Receiver.__init__(self, size, ip)
 
         # Start
         self.start()
 
 
+def display_atari_frames(env_name, ip):
+    """Display the frames of an Atari games in a window.
+
+    The frames should be produced by AtariFramesSender.
+    This is an application that never returns.
+
+    :param env_name: a gym environment name
+    :param ip: source ip address (str)
+    """
+
+    # Receiver
+    receiver = AtariFramesReceiver(env_name, ip)
+    name = env_name + " - " + ip
+
+    # Window
+    window = cv2.namedWindow(name, cv2.WINDOW_NORMAL)
+    width, height = receiver.frame_shape[0:2]
+    scale = 4
+    cv2.resizeWindow(name, width*scale, height*scale)
+
+    # Reproduce
+    while True:
+
+        # Parse frame
+        buff = receiver.get_wait()
+        if buff is None:
+            break
+        frame = np.frombuffer(buff, dtype=np.uint8)
+        frame = np.reshape(frame, receiver.frame_shape)
+
+        # Show
+        cv2.imshow(name, frame)
+        cv2.waitKey(5)
+
+    # Close
+    cv2.destroyAllWindows()
+
+
 if __name__ == "__main__":
-    # TODO: testing here. Delete when done
+    # Just testing here
 
     if sys.argv[1] == "s":
-        sender = AtariFramesSender("Breakout-v4", "localhost")
+        sender = AtariFramesSender("Breakout-v4")
         env = gym.make("Breakout-v4")
         run = True
         frame = env.reset()
@@ -251,9 +290,4 @@ if __name__ == "__main__":
             frame, _, _, _ = env.step(env.action_space.sample())
 
     elif sys.argv[1] == "r":
-        receiver = AtariFramesReceiver("Breakout-v4", "localhost")
-        while True:
-            msg = receiver.get_wait()
-            if msg is None:
-                break
-            print(len(msg))
+        display_atari_frames("Breakout-v4", "127.0.1.1")

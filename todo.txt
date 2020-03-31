@@ -1,10 +1,10 @@
 Things TODO:
 
 >Agent:
-- Classes in streaming specific to frames
-- Retrain on the server and see if it works
+- Add binding with agent --stream
 
 >Features:
+- Add binding with features --stream
 - predict function to how the features work
 - collect training samples during reinforcement learning
 - Batch, instance normalization?
