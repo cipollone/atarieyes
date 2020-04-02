@@ -1,12 +1,10 @@
 Things TODO:
 
 >Agent:
-- Prepare tools to stream frames
-- Retrain on the server and see if it works
+- Train an agent on breakout
 
 >Features:
 - predict function to how the features work
-- collect training samples during reinforcement learning
 - Batch, instance normalization?
 - improve initizazion
 
@@ -17,6 +15,7 @@ Things done:
 - Trained features and agent on server
 - Player.play()
 - Decaying exploration rate
+- collect training samples during reinforcement learning
 
 Notes:
 - In breakout, rewards are given at each brocken brick 
