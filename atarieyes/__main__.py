@@ -95,9 +95,8 @@ def main():
         default=agent_defaults["exploration_episodes"],
         help="Number of episodes after which exproration rate halves")
     agent_train.add_argument(
-        "--stream", type=str,
-        help="Generate a stream of frames and send them to this address")
-    # TODO: only ip. missing receiving side from features
+        "--stream", action="store_true",
+        help='Generate a stream of frames. See "agent watch -h"')
 
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
@@ -114,6 +113,18 @@ def main():
         "-M", "--max-episode_steps", type=int,
         default=agent_defaults["episode_steps"],
         help="Max length of each episode")
+
+    # Agent play op
+    agent_watch = agent_op.add_parser(
+        "watch", help="Display a frames while an agent is training")
+
+    agent_watch.add_argument(
+        "--stream", type=str, required=True,
+        help="Ip address of the remote trainer. "
+        "That machine must be started with the --stream option.")
+    agent_watch.add_argument(
+        "-e", "--env", type=_gym_environment_arg, required=True,
+        help="Identifier of the Gym environmen the agent is being trained on.")
 
     # Features
     features_parser = what_parsers.add_parser(
@@ -159,6 +170,10 @@ def main():
         elif args.op == "play":
             import atarieyes.agent.playing as agent_playing
             agent_playing.Player(args).play()
+        elif args.op == "watch":
+            import atarieyes.streaming as streaming
+            streaming.display_atari_frames(
+                env_name=args.env, ip=args.stream)
     elif args.what == "features":
         if args.op == "train":
             import atarieyes.features.training as features_training

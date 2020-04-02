@@ -23,7 +23,7 @@ from atarieyes.pytools import QuitWithResources
 
 
 # Port used for streaming frames
-app_port = 30003
+app_port = 30013
 
 
 class Sender:
@@ -44,7 +44,7 @@ class Sender:
 
         # Create connection
         self.server = Sender.OneRequestTCPServer(
-            (socket.gethostname(), app_port), Sender.RequestHandler)
+            ("0.0.0.0", app_port), Sender.RequestHandler)
 
         # Data to send
         self._data_queue = queue.Queue()
@@ -161,7 +161,7 @@ class Receiver:
                 chunk = self.sock.recv(min(remaining_bytes, 2048))
                 if chunk == b"":
                     print("Closed", file=sys.stderr)
-                    self._data_queue.put_nowait(None)
+                    self._data_queue.put_nowait(None)  # Signal EOT
                     return
                 chunks.append(chunk)
 
@@ -171,14 +171,25 @@ class Receiver:
             msg = b"".join(chunks)
             self._data_queue.put_nowait(msg)
 
-    def get_wait(self):
-        """Waits until a complete message is received.
+    def receive(self, wait=False):
+        """Return a message received.
 
-        :return: a bytes object containing the message or None at
-            the end of transmission
+        :param wait: if true, waits until a complete message is received
+        :return: a bytes object containing the message, or None if there are
+            no new messages
+        :raises: ConnectionAbortedError at the end of transmission
         """
 
-        return self._data_queue.get(block=True, timeout=None)
+        if not wait and self._data_queue.empty():
+            return None
+
+        # note: this is safe, because i must be the only consumer
+        msg = self._data_queue.get(block=wait, timeout=None)
+
+        if msg is None:
+            raise ConnectionAbortedError("End Of Transmission")
+
+        return msg
 
 
 class AtariFramesSender(Sender):
@@ -237,6 +248,23 @@ class AtariFramesReceiver(Receiver):
         # Start
         self.start()
 
+    def receive(self, wait=False):
+        """Wait until a frame of the game is received.
+
+        See Receiver.receive.
+        """
+
+        # Get
+        data = Receiver.receive(self, wait)
+        if data is None:
+            return None
+
+        # To frame
+        frame = np.frombuffer(data, dtype=np.uint8)
+        frame = np.reshape(frame, self.frame_shape)
+
+        return frame
+
 
 def display_atari_frames(env_name, ip):
     """Display the frames of an Atari games in a window.
@@ -262,32 +290,15 @@ def display_atari_frames(env_name, ip):
     while True:
 
         # Parse frame
-        buff = receiver.get_wait()
-        if buff is None:
+        try:
+            frame = receiver.receive(wait=True)
+        except ConnectionAbortedError:
             break
-        frame = np.frombuffer(buff, dtype=np.uint8)
-        frame = np.reshape(frame, receiver.frame_shape)
 
         # Show
+        frame = np.flip(frame, 2)  # opencv uses BGR
         cv2.imshow(name, frame)
         cv2.waitKey(5)
 
     # Close
     cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    # Just testing here
-
-    if sys.argv[1] == "s":
-        sender = AtariFramesSender("Breakout-v4")
-        env = gym.make("Breakout-v4")
-        run = True
-        frame = env.reset()
-        while run:
-            sender.send(frame)
-            input()
-            frame, _, _, _ = env.step(env.action_space.sample())
-
-    elif sys.argv[1] == "r":
-        display_atari_frames("Breakout-v4", "127.0.1.1")

@@ -5,6 +5,7 @@ from tensorforce.agents import Agent
 
 from atarieyes import tftools
 from atarieyes.tftools import CheckpointSaver
+from atarieyes.streaming import AtariFramesSender
 
 
 class Trainer:
@@ -21,7 +22,7 @@ class Trainer:
         self.discount = args.discount
         self.cont = args.cont
         self.using_validation = not args.no_validation
-        self.stream_address = args.stream
+        self.streaming = args.stream
 
         # Dirs
         model_path, log_path = tftools.prepare_directories(
@@ -57,8 +58,8 @@ class Trainer:
             self.agent, model_path, model_type="tensorforce")
 
         # Setup for streaming
-        if self.stream_address:
-            print(self.stream_address)  # TODO: remove placeholder
+        if self.streaming:
+            self.sender = AtariFramesSender(args.env)
 
     def train(self):
         """Train."""
@@ -119,6 +120,10 @@ class Trainer:
 
             # Learn
             self.agent.observe(terminal=terminal, reward=reward)
+
+            # Stream?
+            if self.streaming:
+                self.sender.send(state)
 
     def run_episode(self):
         """Valuate (on a single episode).
