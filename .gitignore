@@ -1,6 +1,7 @@
 ## Project
-/logs/
-/models/
+/logs
+/models
+/runs/
 
 ## Packaging
 *.egg-info/

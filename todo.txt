@@ -1,13 +1,25 @@
 Things TODO:
-- Train on the server
 
-- Streaming frames in streaming.py
+>Agent:
+- Study the original paper
+	How to specify the net in tensorforce?
+- Is it better to pass consecutive grayscale frames?
+	How to add preprocessing?
+- Train a good breakout agent on breakout
 
-- collect training samples during reinforcement learning
+>Features:
+- predict function to how the features work
 - Batch, instance normalization?
 - improve initizazion
 
 Things done:
 - Simple autoencoder
-- Focus on a part of the image
-- Tensorforce for dqn
+- Crop the game board to the relevant part
+- Tensorforce for DQN
+- Trained features and agent on server
+- Player.play()
+- Decaying exploration rate
+- collect training samples during reinforcement learning
+
+Notes:
+- In breakout, rewards are given at each brocken brick 

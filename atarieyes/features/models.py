@@ -3,9 +3,9 @@
 from abc import abstractmethod
 import tensorflow as tf
 
-from atarieyes import layers
-from atarieyes.layers import BaseLayer
-from atarieyes.pytools import ABC2, AbstractAttribute
+from atarieyes.features import layers
+from atarieyes.features.layers import BaseLayer
+from atarieyes.tools import ABC2, AbstractAttribute
 
 
 class Model(ABC2):
