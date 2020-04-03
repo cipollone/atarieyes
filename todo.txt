@@ -1,6 +1,5 @@
 Things TODO:
 
-- Saver and logger are just for features
 - Fix agent loading
 - Flake8
 - Check locked and add pipfile.lock

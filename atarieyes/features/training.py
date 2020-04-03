@@ -5,7 +5,7 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-from atarieyes import models
+from atarieyes.features import models
 from atarieyes import tools
 
 
