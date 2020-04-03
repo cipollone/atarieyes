@@ -47,7 +47,7 @@ class Trainer:
                 exploration={
                     "type": "decaying",
                     "unit": "episodes", "decay": "exponential",
-                    "initial_value": 0.8, "decay_rate": 0.5,
+                    "initial_value": 0.9, "decay_rate": 0.5,
                     "decay_steps": args.expl_episodes, "staircase": True,
                 },
                 summarizer={

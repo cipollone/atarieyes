@@ -5,7 +5,6 @@
 
 ## Packaging
 *.egg-info/
-/Pipfile.lock
 /docker/src/
 
 ## Linux

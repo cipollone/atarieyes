@@ -18,14 +18,14 @@ def main():
         learning_rate=1e-3,
     )
     agent_defaults = dict(
-        batch=100,
+        batch=50,
         log_frequency=50,
         save_frequency=5*60,
         learning_rate=1e-5,
         learning_rate_episodes=50,
         discount=1.0,
-        episode_steps=1000,
-        exploration_episodes=50,
+        episode_steps=500,
+        exploration_episodes=100,
     )
 
     parser = argparse.ArgumentParser(
