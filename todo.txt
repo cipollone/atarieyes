@@ -1,6 +1,9 @@
 Things TODO:
 
-- Improve resuming
+- Saver and logger are just for features
+- Fix agent loading
+- Flake8
+- Check locked and add pipfile.lock
 - Try without batch
 
 >Agent:
