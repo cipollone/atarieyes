@@ -1,10 +1,11 @@
 Things TODO:
 
-- Improve resuming
-- Try without batch
-
 >Agent:
-- Train an agent on breakout
+- Study the original paper
+	How to specify the net in tensorforce?
+- Is it better to pass consecutive grayscale frames?
+	How to add preprocessing?
+- Train a good breakout agent on breakout
 
 >Features:
 - predict function to how the features work

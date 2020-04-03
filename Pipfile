@@ -17,4 +17,4 @@ tensorforce = {editable = true,git = "https://github.com/tensorforce/tensorforce
 
 [scripts]
 atarieyes = "python -m atarieyes"
-tensorboard = "tensorboard --logdir ."
+tensorboard = "tensorboard --logdir logs/"
