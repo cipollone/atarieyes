@@ -5,7 +5,7 @@
 import argparse
 import gym
 
-from atarieyes.tftools import ArgumentSaver
+from atarieyes.tools import ArgumentSaver
 
 
 def main():
@@ -112,9 +112,8 @@ def main():
         help="Identifier of a Gym environment")
     agent_play.add_argument(
         "-a", "--agent", type=str, required=True,
-        help="Trained agent json specification. "
-        "Usually under: models/agent/<env_name>/agent.json. "
-        "Assuming the checkpoint is in the same directory.")
+        help="Model directory of the trained agent. "
+        "Usually something like: models/agent/<env_name>/ ")
     agent_play.add_argument(
         "-M", "--max-episode_steps", type=int,
         default=agent_defaults["episode_steps"],

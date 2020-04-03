@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 from atarieyes import models
-from atarieyes import tftools
+from atarieyes import tools
 
 
 class Trainer:
@@ -21,7 +21,7 @@ class Trainer:
         # Init
         self.log_frequency = args.logs
         self.cont = args.cont
-        model_path, log_path = tftools.prepare_directories(
+        model_path, log_path = tools.prepare_directories(
             "features", args.env, resuming=self.cont, args=args)
 
         # Environment
@@ -179,6 +179,7 @@ class CheckpointSaver:
         step = int(counters.split(":")[1])
 
         return step
+
 
 class TensorBoardLogger:
     """Visualize data on TensorBoard."""

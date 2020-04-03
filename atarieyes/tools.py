@@ -2,7 +2,9 @@
 
 from abc import ABCMeta
 import signal
+import os
 import json
+import shutil
 
 
 class ABCMeta2(ABCMeta):
