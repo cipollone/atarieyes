@@ -1,5 +1,8 @@
 Things TODO:
 
+- Improve resuming
+- Try without batch
+
 >Agent:
 - Train an agent on breakout
 

@@ -39,8 +39,13 @@ class Trainer:
         # TensorForce Agent
         self.agent = Agent.create(
             agent="dqn", environment=self.env, batch_size=args.batch,
-            discount=self.discount, learning_rate=args.rate,
-            memory=args.max_episode_steps + args.batch,
+            discount=self.discount, memory=args.max_episode_steps + args.batch,
+            learning_rate={
+                "type": "decaying",
+                "unit": "episodes", "decay": "exponential",
+                "initial_value": args.rate, "decay_rate": 0.5,
+                "decay_steps": args.rate_episodes, "staircase": False,
+            } if args.rate_episodes > 0 else args.rate,
             exploration={
                 "type": "decaying",
                 "unit": "episodes", "decay": "exponential",

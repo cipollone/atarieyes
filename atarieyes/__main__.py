@@ -21,7 +21,8 @@ def main():
         batch=100,
         log_frequency=50,
         save_frequency=5,
-        learning_rate=1e-4,
+        learning_rate=1e-5,
+        learning_rate_episodes=50,
         discount=1.0,
         episode_steps=1000,
         exploration_episodes=50,
@@ -64,6 +65,11 @@ def main():
     agent_train.add_argument(
         "-r", "--rate", type=float, default=agent_defaults["learning_rate"],
         help="Learning rate")
+    agent_train.add_argument(
+        "--rate-episodes", type=int,
+        default=agent_defaults["learning_rate_episodes"],
+        help="Number of episodes after which learning rate halves. "
+        "Pass 0 to set a constant rate.")
     agent_train.add_argument(
         "-b", "--batch", type=int, default=agent_defaults["batch"],
         help="Training batch size")
