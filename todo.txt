@@ -1,12 +1,13 @@
 Things TODO:
 
-- Fix agent loading
 - Flake8
 - Check locked and add pipfile.lock
-- Try without batch
 
 >Agent:
+- Test new Trainer on server
 - Train an agent on breakout
+- Try with different batch and update frequency.
+	Is exploration needed?
 
 >Features:
 - predict function to how the features work

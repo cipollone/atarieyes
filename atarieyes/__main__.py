@@ -20,7 +20,7 @@ def main():
     agent_defaults = dict(
         batch=100,
         log_frequency=50,
-        save_frequency=5,
+        save_frequency=5*60,
         learning_rate=1e-5,
         learning_rate_episodes=50,
         discount=1.0,
@@ -80,7 +80,7 @@ def main():
     agent_train.add_argument(
         "-s", "--save-frequency", type=int,
         default=agent_defaults["save_frequency"],
-        help="Save weights after this number of EPISODES")
+        help="Save the agent after this number of SECONDS")
     agent_train.add_argument(
         "-M", "--max-episode_steps", type=int,
         default=agent_defaults["episode_steps"],
@@ -93,9 +93,6 @@ def main():
         help="Continue from previous training")
     agent_train.add_argument(
         "--render", action="store_true", help="Render while training")
-    agent_train.add_argument(
-        "--no-validation", action="store_true",
-        help="Skip the validation step (useful with --render)")
     agent_train.add_argument(
         "--expl-episodes", type=int,
         default=agent_defaults["exploration_episodes"],

@@ -19,7 +19,7 @@ import gym
 import numpy as np
 import cv2
 
-from atarieyes.pytools import QuitWithResources
+from atarieyes.tools import QuitWithResources
 
 
 # Port used for streaming frames
@@ -213,8 +213,8 @@ class AtariFramesSender(Sender):
         # Start
         self.start()
         print("> Serving frames on", self.server.server_address, end="")
-        print("  (pause)", end="")
-        input()   # 
+        print("    (pause)", end="")
+        input()   # Leave some time to connect
 
     def send(self, frame):
         """Send a frame.
@@ -281,7 +281,7 @@ def display_atari_frames(env_name, ip):
     name = env_name + " - " + ip
 
     # Window
-    window = cv2.namedWindow(name, cv2.WINDOW_NORMAL)
+    cv2.namedWindow(name, cv2.WINDOW_NORMAL)
     width, height = receiver.frame_shape[0:2]
     scale = 4
     cv2.resizeWindow(name, width*scale, height*scale)

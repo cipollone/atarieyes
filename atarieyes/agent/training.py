@@ -3,8 +3,7 @@
 from tensorforce.environments import Environment
 from tensorforce.agents import Agent
 
-from atarieyes import tftools
-from atarieyes.tftools import CheckpointSaver
+from atarieyes.tools import prepare_directories
 from atarieyes.streaming import AtariFramesSender
 
 
@@ -18,15 +17,12 @@ class Trainer:
         """
 
         # Store
-        self.save_frequency = args.save_frequency
         self.discount = args.discount
-        self.cont = args.cont
-        self.using_validation = not args.no_validation
         self.streaming = args.stream
 
         # Dirs
-        model_path, log_path = tftools.prepare_directories(
-            "agent", args.env, resuming=self.cont, args=args)
+        model_path, log_path = prepare_directories(
+            "agent", args.env, resuming=args.cont, args=args)
 
         # TensorForce Env
         self.env = Environment.create(
@@ -36,31 +32,40 @@ class Trainer:
         if args.render:
             self.env.visualize = True
 
-        # TensorForce Agent
-        self.agent = Agent.create(
-            agent="dqn", environment=self.env, batch_size=args.batch,
-            discount=self.discount, memory=args.max_episode_steps + args.batch,
-            learning_rate={
-                "type": "decaying",
-                "unit": "episodes", "decay": "exponential",
-                "initial_value": args.rate, "decay_rate": 0.5,
-                "decay_steps": args.rate_episodes, "staircase": False,
-            } if args.rate_episodes > 0 else args.rate,
-            exploration={
-                "type": "decaying",
-                "unit": "episodes", "decay": "exponential",
-                "initial_value": 0.8, "decay_rate": 0.5,
-                "decay_steps": args.expl_episodes, "staircase": True,
-            },
-            summarizer={
-                "directory": log_path, "frequency": args.log_frequency,
-                "labels": ["graph", "losses", "rewards"],
-            },
-        )
+        # TensorForce Agent (new)
+        if not args.cont:
+            self.agent = Agent.create(
+                agent="dqn", environment=self.env,
+                batch_size=args.batch, discount=self.discount,
+                memory=args.max_episode_steps + args.batch,
+                learning_rate={
+                    "type": "decaying",
+                    "unit": "episodes", "decay": "exponential",
+                    "initial_value": args.rate, "decay_rate": 0.5,
+                    "decay_steps": args.rate_episodes, "staircase": False,
+                } if args.rate_episodes > 0 else args.rate,
+                exploration={
+                    "type": "decaying",
+                    "unit": "episodes", "decay": "exponential",
+                    "initial_value": 0.8, "decay_rate": 0.5,
+                    "decay_steps": args.expl_episodes, "staircase": True,
+                },
+                summarizer={
+                    "directory": log_path, "frequency": args.log_frequency,
+                    "labels": ["losses", "rewards"],
+                },
+                saver={
+                    "directory": model_path, "filename": "agent",
+                    "frequency": args.save_frequency, "max-checkpoints": 3,
+                },
+            )
 
-        # Tools
-        self.saver = CheckpointSaver(
-            self.agent, model_path, model_type="tensorforce")
+        # (resume)
+        else:
+            self.agent = Agent.load(
+                directory=model_path, filename="agent", format="tensorflow",
+                environment=self.env)
+            print("> Weights restored.")
 
         # Setup for streaming
         if self.streaming:
@@ -69,96 +74,49 @@ class Trainer:
     def train(self):
         """Train."""
 
-        # Init
-        metrics = None
-        score = None
-
-        # New run
-        if not self.cont:
-            episode = 0
-        # Restore
-        else:
-            episode = self.saver.load(env=self.env)
-            print("> Weights restored.")
-
-            # Initial valuation
-            if self.using_validation:
-                metrics = self.run_episode()
-                print("Initial metrics:", metrics)
-            episode += 1
+        print("> Training")
+        print("Watch it on Tensorboard, or from --stream.")
 
         # Training loop
-        print("> Training")
         while True:
 
             # Do
-            self.train_episode()
+            queries = self.train_episode()
 
-            # Periodic savings
-            if episode % self.save_frequency == 0:
-
-                if self.using_validation:
-                    metrics = self.run_episode()
-                    score = metrics["return"]
-
-                self.saver.save(episode, score=score)
-                print("Episode ", episode, ", metrics: ", metrics,
-                      sep="", end="          \r")
-
-            episode += 1
+            print(queries, end="          \r")
 
     def train_episode(self):
-        """Train on a single episode."""
+        """Train on a single episode.
+
+        :return: a dict of queried tensors
+        """
 
         # Init episode
         state = self.env.reset()
         terminal = False
 
+        act_queries = ["exploration"]
+        observe_queries = ["episode", "timestep"]
+
         # Iterate steps
         while not terminal:
 
             # Agent's turn
-            action = self.agent.act(states=state)
+            action, act_tensors = self.agent.act(
+                states=state, query=act_queries)
 
             # Environment's turn
             state, terminal, reward = self.env.execute(actions=action)
 
             # Learn
-            self.agent.observe(terminal=terminal, reward=reward)
+            _, observe_tensors = self.agent.observe(
+                terminal=terminal, reward=reward, query=observe_queries)
 
             # Stream?
             if self.streaming:
                 self.sender.send(state)
 
-    def run_episode(self):
-        """Valuate (on a single episode).
-
-        :return: A dictionary of metrics that includes "return"
-            (the cumulative discounted reward)
-        """
-
-        # Init episode
-        state = self.env.reset()
-        internals = self.agent.initial_internals()
-        terminal = False
-
-        cumulative = 0
-        discount_i = 1
-
-        # Iterate steps
-        while not terminal:
-
-            # Agent's turn
-            action, internals = self.agent.act(
-                states=state, internals=internals, evaluation=True)
-
-            # Environment's turn
-            state, terminal, reward = self.env.execute(actions=action)
-
-            # Learn
-            cumulative += reward * discount_i
-            discount_i *= self.discount
-
-        # Metrics
-        metrics = {"return": cumulative}
-        return metrics
+        # Queries at the end of episode
+        tensors = dict(zip(act_queries, act_tensors))
+        tensors.update(dict(zip(observe_queries, observe_tensors)))
+        return tensors
