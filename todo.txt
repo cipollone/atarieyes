@@ -1,9 +1,11 @@
 Things TODO:
 
-- Migration from tensorforce to keras-rl
 
 >Agent:
-- Train a good breakout agent on breakout
+- Migration:
+	- Start writing minimal working example in Trainer
+- Add all previous __main__ arguments such as --render, --stream
+- Train a good pong agent
 
 >Features:
 - predict function to how the features work
