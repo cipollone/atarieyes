@@ -1,11 +1,12 @@
 Things TODO:
 
 >Agent:
-- Study the original paper
-	How to specify the net in tensorforce?
-- Is it better to pass consecutive grayscale frames?
-	How to add preprocessing?
+- How to specify the net and preprocessing in Tensorforce?
+- Maybe I can prepare the policy network with my own class,
+	creating a bridge with Tensorforce networks.
+- Preprocessing: see at the original paper
 - Train a good breakout agent on breakout
+- Use Dueling DQN
 
 >Features:
 - predict function to how the features work
