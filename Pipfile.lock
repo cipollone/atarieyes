@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "f98574a9aef618c6e803b2f8075845e93c81e8684e313371410aff3d8465e5fc"
+            "sha256": "73e9f263eae1cf20bedb0d7c2026fd9d2fb893a36e861fcd968e095a20841a78"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -50,10 +50,10 @@
         },
         "certifi": {
             "hashes": [
-                "sha256:017c25db2a153ce562900032d5bc68e9f191e44e9a0f762f373977de9df1fbb3",
-                "sha256:25b64c7da4cd7479594d035c08c2d809eb4aab3a26e5a990ea98cc450c320f1f"
+                "sha256:b0e07438175de96ab74de9ab5dc40985ef8b44a41e9636a2000099dc3b670ddd",
+                "sha256:e68768546aa055623812ada64aec5e1f02ca20a9e7f3d3432dd8b0f35a6e7951"
             ],
-            "version": "==2019.11.28"
+            "version": "==2020.4.5"
         },
         "chardet": {
             "hashes": [
@@ -212,11 +212,9 @@
             "version": "==1.1.0"
         },
         "keras-rl": {
-            "hashes": [
-                "sha256:7bbbb24c8f4560a03f59fb062a5003da102de033bc8cd7d06b69b4c1b48ec054"
-            ],
-            "index": "pypi",
-            "version": "==0.4.2"
+            "editable": true,
+            "git": "https://github.com/cipollone/keras-rl.git",
+            "ref": "ea7218be9a827f515e2bc778b09b4ff9f254dfdc"
         },
         "markdown": {
             "hashes": [
@@ -543,10 +541,10 @@
         },
         "certifi": {
             "hashes": [
-                "sha256:017c25db2a153ce562900032d5bc68e9f191e44e9a0f762f373977de9df1fbb3",
-                "sha256:25b64c7da4cd7479594d035c08c2d809eb4aab3a26e5a990ea98cc450c320f1f"
+                "sha256:b0e07438175de96ab74de9ab5dc40985ef8b44a41e9636a2000099dc3b670ddd",
+                "sha256:e68768546aa055623812ada64aec5e1f02ca20a9e7f3d3432dd8b0f35a6e7951"
             ],
-            "version": "==2019.11.28"
+            "version": "==2020.4.5"
         },
         "chardet": {
             "hashes": [

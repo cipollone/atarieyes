@@ -2,6 +2,7 @@ Things TODO:
 
 >Agent:
 - Migration: make the minimal example work with keras-rl
+- Remember to commit all the fixes applied to keras-rl
 - Add all previous __main__ arguments such as --render, --stream
 - Migrate to tf.keras
 

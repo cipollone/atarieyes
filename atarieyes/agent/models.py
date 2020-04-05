@@ -66,7 +66,7 @@ def dqn_atari_example_model():
     return model
 
 
-def build_agent():
+def build_agent(nb_actions):
 
     model = dqn_atari_example_model()
 
@@ -90,7 +90,7 @@ def build_agent():
     # policy = BoltzmannQPolicy(tau=1.)
     # Feel free to give it a try!
 
-    dqn = DQNAgent(model=model, nb_actions=4, policy=policy, memory=memory,
+    dqn = DQNAgent(model=model, nb_actions=nb_actions, policy=policy, memory=memory,
                    processor=processor, nb_steps_warmup=50000, gamma=.99, target_model_update=10000,
                    train_interval=4, delta_clip=1.)
     dqn.compile(Adam(lr=.00025), metrics=['mae'])

@@ -25,7 +25,7 @@ class Trainer:
         self.env = gym.make(args.env)
 
         # Agent: 
-        self.agent = models.build_agent()
+        self.agent = models.build_agent(nb_actions=self.env.action_space.n)
 
     def train(self):
         """Train."""
