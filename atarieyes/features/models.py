@@ -3,8 +3,8 @@
 from abc import abstractmethod
 import tensorflow as tf
 
-from atarieyes.features import layers
-from atarieyes.features.layers import BaseLayer
+from atarieyes import layers
+from atarieyes.layers import BaseLayer
 from atarieyes.tools import ABC2, AbstractAttribute
 
 

@@ -1,10 +1,8 @@
 Things TODO:
 
+- Migration from tensorforce to keras-rl
+
 >Agent:
-- Study the original paper
-	How to specify the net in tensorforce?
-- Is it better to pass consecutive grayscale frames?
-	How to add preprocessing?
 - Train a good breakout agent on breakout
 
 >Features:
