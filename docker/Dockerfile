@@ -21,14 +21,20 @@ RUN apt-get -y update && \
 apt-get -y upgrade
 
 # Project dependencies
-RUN apt-get -y install python3-pip bash-completion tmux git \
-libsm6 libxrender-dev
 
-RUN pip3 --no-cache-dir install -U wheel setuptools pip && \
-pip3 --no-cache-dir install -U ipython flake8 pipenv-setup \
-opencv-python numpy gym[atari] \
--e git+https://github.com/tensorforce/tensorforce.git@0.5.4#egg=tensorforce
+# Basics
+RUN apt-get -y install python3-pip bash-completion tmux git 
+# Opencv
+RUN apt-get -y install libsm6 libxrender-dev
 
+# Basics
+RUN pip3 --no-cache-dir install -U wheel setuptools pip
+# [dev-packages]
+RUN pip3 --no-cache-dir install -U ipython flake8 pipenv-setup
+# [packages] (tensorflow already there)
+RUN opencv-python numpy gym[atari] keras-rl
+
+# Go
 USER ubuntu
 
 ENV PATH="/home/ubuntu/bin:/home/ubuntu/.local/bin:$PATH"

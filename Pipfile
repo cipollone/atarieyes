@@ -13,7 +13,7 @@ opencv-python = "*"
 numpy = "*"
 gym = {extras = ["atari"],version = "*"}
 tensorflow = "==2.1"
-tensorforce = {editable = true,git = "https://github.com/tensorforce/tensorforce.git",ref = "0.5.4"}
+keras-rl = "*"
 
 [scripts]
 atarieyes = "python -m atarieyes"
