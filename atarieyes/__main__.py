@@ -50,6 +50,12 @@ def main():
     # Agent train op
     agent_train = agent_op.add_parser("train", help="Train the RL agent")
 
+    agent_train.add_argument(
+        "-e", "--env", type=_gym_environment_arg, required=True,
+        help="Identifier of a Gym environment")
+    agent_train.add_argument(
+        "-c", "--continue", action="store_true", dest="cont",
+        help="Continue from previous training")  # TODO: no effect
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
 

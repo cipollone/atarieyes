@@ -1,4 +1,4 @@
-"""Definitions for all models."""
+"""Definitions of networks used for feature extraction."""
 
 from abc import abstractmethod
 import tensorflow as tf

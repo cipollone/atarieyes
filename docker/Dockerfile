@@ -32,7 +32,7 @@ RUN pip3 --no-cache-dir install -U wheel setuptools pip
 # [dev-packages]
 RUN pip3 --no-cache-dir install -U ipython flake8 pipenv-setup
 # [packages] (tensorflow already there)
-RUN opencv-python numpy gym[atari] keras-rl
+RUN pip3 --no-cache-dir install -U opencv-python numpy gym[atari] keras-rl
 
 # Go
 USER ubuntu
