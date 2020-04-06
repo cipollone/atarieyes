@@ -1,10 +1,10 @@
 Things TODO:
 
 >Agent:
-- Migration: make the minimal example work with keras-rl
-	Check that your integrated example works like keras-rl
-- Remember to commit all the fixes applied to keras-rl
 - Migrate to tf.keras
+- Push changes in keras-rl
+- Integrate the working example with project
+- Define your custom callbacks
 - Add all previous __main__ arguments such as --render, --stream
 
 >Features:

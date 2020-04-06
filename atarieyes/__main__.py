@@ -56,6 +56,10 @@ def main():
     agent_train.add_argument(
         "-c", "--continue", action="store_true", dest="cont",
         help="Continue from previous training")  # TODO: no effect
+    agent_train.add_argument(
+        "--deterministic", action="store_true",
+        help="Set a constant seed to ensure repeatability")
+
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
 

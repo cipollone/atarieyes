@@ -1,5 +1,6 @@
 """This module allows to train a RL agent."""
 
+import numpy as np
 import gym
 from keras.optimizers import Adam
 from rl.memory import SequentialMemory
@@ -29,7 +30,17 @@ class Trainer:
         # TODO
 
         # Environment
+        self.env_name = args.env
         self.env = gym.make(args.env)
+
+        # Repeatability
+        if args.deterministic:
+            if "Deterministic" not in self.env_name:
+                raise ValueError(
+                    "--deterministic only works with deterministic"
+                    " environments")
+            self.env.seed(30013)
+            np.random.seed(30013)
 
         # Agent: 
         self.keras_agent = self.build_agent()
@@ -73,9 +84,9 @@ class Trainer:
 
         # Okay, now it's time to learn something! We capture the interrupt exception so that training
         # can be prematurely aborted. Notice that now you can use the built-in Keras callbacks!
-        weights_filename = 'dqn_{}_weights.h5f'.format(self.env.spec.id)
-        checkpoint_weights_filename = 'dqn_' + self.env.spec.id + '_weights_{step}.h5f'
-        log_filename = 'dqn_{}_log.json'.format(self.env.spec.id)
+        weights_filename = 'dqn_{}_weights.h5f'.format(self.env_name)
+        checkpoint_weights_filename = 'dqn_' + self.env_name + '_weights_{step}.h5f'
+        log_filename = 'dqn_{}_log.json'.format(self.env_name)
         callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=250000)]
         callbacks += [FileLogger(log_filename, interval=100)]
         self.keras_agent.fit(self.env, callbacks=callbacks, nb_steps=1750000, log_interval=10000)
