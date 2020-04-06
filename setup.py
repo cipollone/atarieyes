@@ -8,11 +8,11 @@ with open("README.md", "r") as fh:
 
 setup(
     dependency_links=[
-        "git+https://github.com/tensorforce/tensorforce.git@0.5.4#egg=tensorforce"
+        "git+https://github.com/cipollone/keras-rl.git@tf2-keras#egg=keras-rl"
     ],
     install_requires=["opencv-python", "numpy", "gym[atari]", "tensorflow==2.1"],
     name="atarieyes",
-    version="0.0.2",
+    version="0.0.3",
     author="Roberto Cipollone",
     author_email="cipollone.rt@gmail.com",
     description="RL on the Atari Games with feature extraction.",

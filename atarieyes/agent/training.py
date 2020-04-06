@@ -1,14 +1,21 @@
 """This module allows to train a RL agent."""
 
-from tensorforce.environments import Environment
-from tensorforce.agents import Agent
+import numpy as np
+import gym
+from keras.optimizers import Adam
+from rl.memory import SequentialMemory
+from rl.agents.dqn import DQNAgent
+from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
+from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
 from atarieyes.tools import prepare_directories
-from atarieyes.streaming import AtariFramesSender
+from atarieyes.agent import models
+
+WINDOW_LENGTH = 4
 
 
 class Trainer:
-    """Train a RL agent on the atari games with TensorForce."""
+    """Train a RL agent on the Atari games."""
 
     def __init__(self, args):
         """Initialize.
@@ -17,106 +24,75 @@ class Trainer:
         """
 
         # Store
-        self.discount = args.discount
-        self.streaming = args.stream
+        # TODO
 
         # Dirs
-        model_path, log_path = prepare_directories(
-            "agent", args.env, resuming=args.cont, args=args)
+        # TODO
 
-        # TensorForce Env
-        self.env = Environment.create(
-            environment="gym", level=args.env,
-            max_episode_steps=args.max_episode_steps
-        )
-        if args.render:
-            self.env.visualize = True
+        # Environment
+        self.env_name = args.env
+        self.env = gym.make(args.env)
 
-        # TensorForce Agent (new)
-        if not args.cont:
-            self.agent = Agent.create(
-                agent="dqn", environment=self.env,
-                batch_size=args.batch, discount=self.discount,
-                memory=args.max_episode_steps + args.batch,
-                learning_rate={
-                    "type": "decaying",
-                    "unit": "episodes", "decay": "exponential",
-                    "initial_value": args.rate, "decay_rate": 0.5,
-                    "decay_steps": args.rate_episodes, "staircase": False,
-                } if args.rate_episodes > 0 else args.rate,
-                exploration={
-                    "type": "decaying",
-                    "unit": "episodes", "decay": "exponential",
-                    "initial_value": 0.9, "decay_rate": 0.5,
-                    "decay_steps": args.expl_episodes, "staircase": True,
-                },
-                summarizer={
-                    "directory": log_path, "frequency": args.log_frequency,
-                    "labels": ["losses", "rewards"],
-                },
-                saver={
-                    "directory": model_path, "filename": "agent",
-                    "frequency": args.save_frequency, "max-checkpoints": 3,
-                },
-            )
+        # Repeatability
+        if args.deterministic:
+            if "Deterministic" not in self.env_name:
+                raise ValueError(
+                    "--deterministic only works with deterministic"
+                    " environments")
+            self.env.seed(30013)
+            np.random.seed(30013)
 
-        # (resume)
-        else:
-            self.agent = Agent.load(
-                directory=model_path, filename="agent", format="tensorflow",
-                environment=self.env)
-            print("> Weights restored.")
+        # Agent: 
+        self.keras_agent = self.build_agent()
 
-        # Setup for streaming
-        if self.streaming:
-            self.sender = AtariFramesSender(args.env)
+    def build_agent(self):
+
+        model = models.dqn_atari_example_model()
+
+        memory = SequentialMemory(limit=1000000, window_length=WINDOW_LENGTH)
+        processor = models.AtariProcessor()
+
+        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1.,
+            value_min=.1, value_test=.05, nb_steps=1000000)
+
+        # Select a policy. We use eps-greedy action selection, which means that a random action is selected
+        # with probability eps. We anneal eps from 1.0 to 0.1 over the course of 1M steps. This is done so that
+        # the agent initially explores the environment (high eps) and then gradually sticks to what it knows
+        # (low eps). We also set a dedicated eps value that is used during testing. Note that we set it to 0.05
+        # so that the agent still performs some random actions. This ensures that the agent cannot get stuck.
+        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
+                                      nb_steps=1000000)
+
+        # The trade-off between exploration and exploitation is difficult and an on-going research topic.
+        # If you want, you can experiment with the parameters or use a different policy. Another popular one
+        # is Boltzmann-style exploration:
+        # policy = BoltzmannQPolicy(tau=1.)
+        # Feel free to give it a try!
+
+        dqn = DQNAgent(model=model, nb_actions=self.env.action_space.n,
+            policy=policy, memory=memory, processor=processor,
+            nb_steps_warmup=50000, gamma=.99, target_model_update=10000,
+            train_interval=4, delta_clip=1.)
+        dqn.compile(Adam(lr=.00025), metrics=['mae'])
+
+        return dqn
 
     def train(self):
         """Train."""
 
-        print("> Training")
-        print("Watch it on Tensorboard, or from --stream.")
+        # NOTE: copied from keras-rl examples TODO
 
-        # Training loop
-        while True:
+        # Okay, now it's time to learn something! We capture the interrupt exception so that training
+        # can be prematurely aborted. Notice that now you can use the built-in Keras callbacks!
+        weights_filename = 'dqn_{}_weights.h5f'.format(self.env_name)
+        checkpoint_weights_filename = 'dqn_' + self.env_name + '_weights_{step}.h5f'
+        log_filename = 'dqn_{}_log.json'.format(self.env_name)
+        callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=250000)]
+        callbacks += [FileLogger(log_filename, interval=100)]
+        self.keras_agent.fit(self.env, callbacks=callbacks, nb_steps=1750000, log_interval=10000)
 
-            # Do
-            queries = self.train_episode()
+        # After training is done, we save the final weights one more time.
+        self.keras_agent.save_weights(weights_filename, overwrite=True)
 
-            print(queries, end="          \r")
-
-    def train_episode(self):
-        """Train on a single episode.
-
-        :return: a dict of queried tensors
-        """
-
-        # Init episode
-        state = self.env.reset()
-        terminal = False
-
-        act_queries = ["exploration"]
-        observe_queries = ["episode", "timestep"]
-
-        # Iterate steps
-        while not terminal:
-
-            # Agent's turn
-            action, act_tensors = self.agent.act(
-                states=state, query=act_queries)
-
-            # Environment's turn
-            state, terminal, reward = self.env.execute(actions=action)
-
-            # Learn
-            _, observe_tensors = self.agent.observe(
-                terminal=terminal, reward=reward, query=observe_queries)
-
-            # Stream?
-            if self.streaming:
-                self.sender.send(state)
-
-        # Queries at the end of episode
-        tensors = dict(zip(act_queries, act_tensors))
-        tensors.update(dict(zip(observe_queries, observe_tensors)))
-        return tensors
+        # Finally, evaluate our algorithm for 10 episodes.
+        self.keras_agent.test(self.env, nb_episodes=10, visualize=False)

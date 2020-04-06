@@ -1,11 +1,11 @@
 Things TODO:
 
 >Agent:
-- Study the original paper
-	How to specify the net in tensorforce?
-- Is it better to pass consecutive grayscale frames?
-	How to add preprocessing?
-- Train a good breakout agent on breakout
+- Migrate to tf.keras
+- Push changes in keras-rl
+- Integrate the working example with project
+- Define your custom callbacks
+- Add all previous __main__ arguments such as --render, --stream
 
 >Features:
 - predict function to how the features work
