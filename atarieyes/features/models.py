@@ -18,7 +18,7 @@ class Model(ABC2):
     The `keras` attribute is a keras model.
     """
 
-    # This is the compiled keras model
+    # This is the keras model
     keras = AbstractAttribute()
 
     @abstractmethod

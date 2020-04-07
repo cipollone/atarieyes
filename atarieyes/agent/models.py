@@ -3,7 +3,7 @@
 import numpy as np
 from PIL import Image
 from keras.models import Sequential
-from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute
+from keras.layers import Dense, Activation, Flatten, Conv2D, Permute
 import keras.backend as K
 
 from rl.core import Processor
@@ -49,11 +49,11 @@ def dqn_atari_example_model():
         model.add(Permute((1, 2, 3), input_shape=input_shape))
     else:
         raise RuntimeError('Unknown imag_data_format.')
-    model.add(Convolution2D(32, (8, 8), strides=(4, 4)))
+    model.add(Conv2D(32, (8, 8), strides=(4, 4)))
     model.add(Activation('relu'))
-    model.add(Convolution2D(64, (4, 4), strides=(2, 2)))
+    model.add(Conv2D(64, (4, 4), strides=(2, 2)))
     model.add(Activation('relu'))
-    model.add(Convolution2D(64, (3, 3), strides=(1, 1)))
+    model.add(Conv2D(64, (3, 3), strides=(1, 1)))
     model.add(Activation('relu'))
     model.add(Flatten())
     model.add(Dense(512))

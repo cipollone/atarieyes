@@ -1,9 +1,8 @@
 Things TODO:
 
 >Agent:
-- Migrate to tf.keras
-- Push changes in keras-rl
 - Integrate the working example with project
+- flake8
 - Define your custom callbacks
 - Add all previous __main__ arguments such as --render, --stream
 
