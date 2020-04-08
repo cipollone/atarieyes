@@ -42,8 +42,8 @@ class ABCMeta2(ABCMeta):
                 not_defined.append(attr)
         if not_defined:
             raise TypeError(
-                "class __init__ did not define these abstract attributes:\n" +
-                str(not_defined))
+                Class.__name__ + ".__init__ did not define these abstract "
+                "attributes:\n" + str(not_defined))
 
         return instance
 

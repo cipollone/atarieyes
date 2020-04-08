@@ -9,7 +9,7 @@ from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
 from atarieyes.tools import prepare_directories
-from atarieyes.agent import models
+from atarieyes.agent.models import AtariAgent
 
 WINDOW_LENGTH = 4
 
@@ -47,13 +47,8 @@ class Trainer:
 
     def build_agent(self):
 
-        model = models.dqn_atari_example_model()
 
         memory = SequentialMemory(limit=1000000, window_length=WINDOW_LENGTH)
-        processor = models.AtariProcessor()
-
-        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1.,
-            value_min=.1, value_test=.05, nb_steps=1000000)
 
         # Select a policy. We use eps-greedy action selection, which means that a random action is selected
         # with probability eps. We anneal eps from 1.0 to 0.1 over the course of 1M steps. This is done so that
@@ -69,10 +64,12 @@ class Trainer:
         # policy = BoltzmannQPolicy(tau=1.)
         # Feel free to give it a try!
 
-        dqn = DQNAgent(model=model, nb_actions=self.env.action_space.n,
-            policy=policy, memory=memory, processor=processor,
-            nb_steps_warmup=50000, gamma=.99, target_model_update=10000,
-            train_interval=4, delta_clip=1.)
+        atari_agent = AtariAgent(n_actions=self.env.action_space.n)
+
+        dqn = DQNAgent(model=atari_agent.model,
+            nb_actions=self.env.action_space.n, policy=policy, memory=memory,
+            processor=atari_agent.processor, nb_steps_warmup=50000, gamma=.99,
+            target_model_update=10000, train_interval=4, delta_clip=1.)
         dqn.compile(Adam(lr=.00025), metrics=['mae'])
 
         return dqn
