@@ -1,11 +1,9 @@
 Things TODO:
 
 >Agent:
-- Integrate the working example with project
-- flake8
-- Define your custom callbacks
-- Add all previous __main__ arguments such as --render, --stream
-- What is the current batch size?
+- Resuming?
+- Tensorboard?
+- Render or streaming?
 
 >Features:
 - predict function to how the features work

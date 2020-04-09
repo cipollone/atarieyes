@@ -149,7 +149,7 @@ def make_layer(name, function):
         return self._function(inputs, **kwargs_all)
 
     # Define a new layer
-    LayerClass = type(name, (BaseLayer,), {'__init__': __init__, 'call': call})
+    LayerClass = type(name, (BaseLayer,), {"__init__": __init__, "call": call})
     return LayerClass
 
 

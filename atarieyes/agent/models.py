@@ -42,7 +42,7 @@ class AtariAgent(QAgentDef):
 
     def __init__(self, n_actions):
         """Initialize.
-        
+
         :param n_actions: number of actions for this environment.
         """
 
@@ -63,7 +63,7 @@ class AtariAgent(QAgentDef):
         # Define
         assert K.image_data_format() == "channels_last"
         model = Sequential([
-            Permute((2, 3, 1), input_shape=input_shape),
+            Permute((2, 3, 1), input_shape=input_shape),  # window -> channels
             Conv2D(32, (8, 8), strides=(4, 4)),
             Activation("relu"),
             Conv2D(64, (4, 4), strides=(2, 2)),

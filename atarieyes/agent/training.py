@@ -1,5 +1,6 @@
 """This module allows to train a RL agent."""
 
+import os
 import numpy as np
 import gym
 from keras.optimizers import Adam
@@ -24,10 +25,20 @@ class Trainer:
         """
 
         # Store
-        # TODO
+        self.memory_limit = args.memory
+        self.learning_rate = args.rate
+        self.steps_warmup = args.warmup
+        self.gamma = args.gamma
 
         # Dirs
-        # TODO
+        model_path, log_path = prepare_directories(
+            "agent", args.env, resuming=args.cont, args=args)
+        model_filenames = "weights_{step}.h5f"
+        log_filename = "log.json"
+        self.model_files = os.path.join(model_path, model_filenames)
+        self.log_file = os.path.join(log_path, log_filename)
+
+        # TODO: cont doesn't really resume
 
         # Environment
         self.env_name = args.env
@@ -42,54 +53,63 @@ class Trainer:
             self.env.seed(30013)
             np.random.seed(30013)
 
-        # Agent: 
-        self.keras_agent = self.build_agent()
+        # Agent
+        self.kerasrl_agent = self.build_agent()
+
+        # Callbacks
+        self.callbacks = [
+            ModelIntervalCheckpoint(
+                filepath=self.model_files, interval=args.saves),
+            FileLogger(filepath=self.log_file, interval=100),
+        ]
 
     def build_agent(self):
+        """Defines a Keras-rl agent, ready for training.
 
+        :return: the rl agent
+        """
 
-        memory = SequentialMemory(limit=1000000, window_length=WINDOW_LENGTH)
+        # Samples are extracted from memory, not observed directly
+        memory = SequentialMemory(
+            limit=self.memory_limit, window_length=AtariAgent.window_length)
 
-        # Select a policy. We use eps-greedy action selection, which means that a random action is selected
-        # with probability eps. We anneal eps from 1.0 to 0.1 over the course of 1M steps. This is done so that
-        # the agent initially explores the environment (high eps) and then gradually sticks to what it knows
-        # (low eps). We also set a dedicated eps value that is used during testing. Note that we set it to 0.05
-        # so that the agent still performs some random actions. This ensures that the agent cannot get stuck.
-        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
-                                      nb_steps=1000000)
+        # Linear dicrease of greedy actions
+        policy = LinearAnnealedPolicy(
+            EpsGreedyQPolicy(), attr="eps", value_max=1., value_min=.1,
+            value_test=.05, nb_steps=1000000)
 
-        # The trade-off between exploration and exploitation is difficult and an on-going research topic.
-        # If you want, you can experiment with the parameters or use a different policy. Another popular one
-        # is Boltzmann-style exploration:
-        # policy = BoltzmannQPolicy(tau=1.)
-        # Feel free to give it a try!
-
+        # Define network for Atari games
         atari_agent = AtariAgent(n_actions=self.env.action_space.n)
 
-        dqn = DQNAgent(model=atari_agent.model,
-            nb_actions=self.env.action_space.n, policy=policy, memory=memory,
-            processor=atari_agent.processor, nb_steps_warmup=50000, gamma=.99,
-            target_model_update=10000, train_interval=4, delta_clip=1.)
-        dqn.compile(Adam(lr=.00025), metrics=['mae'])
+        # RL agent
+        dqn = DQNAgent(
+            model=atari_agent.model,
+            enable_double_dqn=True,
+            enable_dueling_network=False,
+            nb_actions=self.env.action_space.n,
+            policy=policy,
+            memory=memory,
+            processor=atari_agent.processor,
+            nb_steps_warmup=self.steps_warmup,
+            gamma=self.gamma,
+            target_model_update=10000,
+            train_interval=4,
+            delta_clip=1.0,
+        )
+        dqn.compile(Adam(lr=self.learning_rate), metrics=["mae"])
+        # TODO: which metrics?
+        # TODO: why train interval is 4 != batch?
 
         return dqn
 
     def train(self):
         """Train."""
 
-        # NOTE: copied from keras-rl examples TODO
+        # Go
+        self.kerasrl_agent.fit(
+            self.env, callbacks=self.callbacks, nb_steps=2000000,
+            log_interval=10000)
 
-        # Okay, now it's time to learn something! We capture the interrupt exception so that training
-        # can be prematurely aborted. Notice that now you can use the built-in Keras callbacks!
-        weights_filename = 'dqn_{}_weights.h5f'.format(self.env_name)
-        checkpoint_weights_filename = 'dqn_' + self.env_name + '_weights_{step}.h5f'
-        log_filename = 'dqn_{}_log.json'.format(self.env_name)
-        callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=250000)]
-        callbacks += [FileLogger(log_filename, interval=100)]
-        self.keras_agent.fit(self.env, callbacks=callbacks, nb_steps=1750000, log_interval=10000)
-
-        # After training is done, we save the final weights one more time.
-        self.keras_agent.save_weights(weights_filename, overwrite=True)
-
-        # Finally, evaluate our algorithm for 10 episodes.
-        self.keras_agent.test(self.env, nb_episodes=10, visualize=False)
+        # Save final weights
+        self.kerasrl_agent.save_weights(
+            self.model_files.format("last"), overwrite=True)

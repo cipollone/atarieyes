@@ -76,7 +76,7 @@ class FrameAutoencoder(Model):
         outputs = (*ret["outputs"], ret["loss"])
 
         model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name='frame_autoencoder')
+            inputs=inputs, outputs=outputs, name="frame_autoencoder")
         model.summary()
 
         # Store

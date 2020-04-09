@@ -14,7 +14,7 @@ class Player:
         :param args: namespace of arguments; see --help.
         """
 
-         # TODO
+        # TODO
 
     def play(self):
         """Play."""
