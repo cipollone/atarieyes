@@ -1,8 +1,10 @@
 Things TODO:
 
 >Agent:
-- Resuming?
-- Tensorboard?
+- Player
+- Resuming from wrong step. Also policy does not resumes correctly.
+- Fix keras-rl graph saving
+- Tensorboard logs
 - Render or streaming?
 
 >Features:

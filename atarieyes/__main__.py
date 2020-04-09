@@ -23,6 +23,8 @@ def main():
         steps_warmup=50000,
         gamma=0.99,
         save_frequency=200000,
+        batch_size=32,
+        train_interval=4,
     )
 
     parser = argparse.ArgumentParser(
@@ -66,8 +68,11 @@ def main():
         "-g", "--gamma", type=float, default=agent_defaults["gamma"],
         help="RL discount factor")
     agent_train.add_argument(
-        "-c", "--continue", action="store_true", dest="cont",
-        help="Continue from previous training")
+        "-b", "--batch", type=int, default=agent_defaults["batch_size"],
+        help="Training batch size")
+    agent_train.add_argument(
+        "-c", "--continue", dest="cont", default=False, const=True, nargs="?",
+        metavar="STEP", help="Continue from previous checkpoint.")
     agent_train.add_argument(
         "-d", "--deterministic", action="store_true",
         help="Set a constant seed to ensure repeatability")
@@ -77,6 +82,10 @@ def main():
     agent_train.add_argument(
         "-s", "--saves", type=int, default=agent_defaults["save_frequency"],
         help="Save models after this number of steps")
+    agent_train.add_argument(
+        "-t", "--train-interval", type=int,
+        default=agent_defaults["train_interval"],
+        help="Train every <t> number of steps/observations")
     agent_train.add_argument(
         "--warmup", type=int, default=agent_defaults["steps_warmup"],
         help="Number of observations to collect before training")
