@@ -1,1 +1,1 @@
-docker build --rm -t tf2dock .
+docker build --rm -t eyes2dock .

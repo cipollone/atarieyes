@@ -1,14 +1,20 @@
 """This module allows to train a RL agent."""
 
-from tensorforce.environments import Environment
-from tensorforce.agents import Agent
+import os
+import numpy as np
+import gym
+from keras.optimizers import Adam
+from rl.memory import SequentialMemory
+from rl.agents.dqn import DQNAgent
+from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
+from rl.callbacks import Callback, FileLogger
 
-from atarieyes.tools import prepare_directories
-from atarieyes.streaming import AtariFramesSender
+from atarieyes.tools import Namespace, prepare_directories
+from atarieyes.agent.models import AtariAgent
 
 
 class Trainer:
-    """Train a RL agent on the atari games with TensorForce."""
+    """Train a RL agent on the Atari games."""
 
     def __init__(self, args):
         """Initialize.
@@ -16,107 +22,157 @@ class Trainer:
         :param args: namespace of arguments; see --help.
         """
 
-        # Store
-        self.discount = args.discount
-        self.streaming = args.stream
+        self.cont = args.cont
 
         # Dirs
         model_path, log_path = prepare_directories(
-            "agent", args.env, resuming=args.cont, args=args)
+            "agent", args.env, resuming=self.cont, args=args)
+        log_filename = "log.json"
+        self.log_file = os.path.join(log_path, log_filename)  # TODO: TB logger
 
-        # TensorForce Env
-        self.env = Environment.create(
-            environment="gym", level=args.env,
-            max_episode_steps=args.max_episode_steps
+        # Environment
+        self.env = gym.make(args.env)
+        self.env_name = args.env
+
+        # Repeatability
+        if args.deterministic:
+            if "Deterministic" not in self.env_name:
+                raise ValueError(
+                    "--deterministic only works with deterministic"
+                    " environments")
+            self.env.seed(30013)
+            np.random.seed(30013)
+
+        # Agent
+        self.kerasrl_agent = self.build_agent(
+            Namespace(args, n_actions=self.env.action_space.n))
+
+        # Tools
+        self.saver = CheckpointSaver(
+            agent=self.kerasrl_agent, path=model_path, interval=args.saves)
+
+        # Callbacks
+        self.callbacks = [
+            self.saver,
+            FileLogger(filepath=self.log_file, interval=100),
+        ]
+
+    @staticmethod
+    def build_agent(spec):
+        """Defines a Keras-rl agent, ready for training.
+
+        :param spec: a Namespace of agent specification options.
+        :return: the rl agent
+        """
+
+        # Samples are extracted from memory, not observed directly
+        memory = SequentialMemory(
+            limit=spec.memory_limit, window_length=AtariAgent.window_length)
+
+        # Linear dicrease of greedy actions
+        train_policy = LinearAnnealedPolicy(
+            EpsGreedyQPolicy(), attr="eps", value_max=1.0, value_min=0.1,
+            value_test=0.05, nb_steps=1000000
         )
-        if args.render:
-            self.env.visualize = True
+        test_policy = EpsGreedyQPolicy(eps=0.05)
 
-        # TensorForce Agent (new)
-        if not args.cont:
-            self.agent = Agent.create(
-                agent="dqn", environment=self.env,
-                batch_size=args.batch, discount=self.discount,
-                memory=args.max_episode_steps + args.batch,
-                learning_rate={
-                    "type": "decaying",
-                    "unit": "episodes", "decay": "exponential",
-                    "initial_value": args.rate, "decay_rate": 0.5,
-                    "decay_steps": args.rate_episodes, "staircase": False,
-                } if args.rate_episodes > 0 else args.rate,
-                exploration={
-                    "type": "decaying",
-                    "unit": "episodes", "decay": "exponential",
-                    "initial_value": 0.9, "decay_rate": 0.5,
-                    "decay_steps": args.expl_episodes, "staircase": True,
-                },
-                summarizer={
-                    "directory": log_path, "frequency": args.log_frequency,
-                    "labels": ["losses", "rewards"],
-                },
-                saver={
-                    "directory": model_path, "filename": "agent",
-                    "frequency": args.save_frequency, "max-checkpoints": 3,
-                },
-            )
+        # Define network for Atari games
+        atari_agent = AtariAgent(n_actions=spec.n_actions)
 
-        # (resume)
-        else:
-            self.agent = Agent.load(
-                directory=model_path, filename="agent", format="tensorflow",
-                environment=self.env)
-            print("> Weights restored.")
+        # RL agent
+        dqn = DQNAgent(
+            model=atari_agent.model,
+            enable_double_dqn=True,
+            enable_dueling_network=False,
+            nb_actions=spec.n_actions,
+            policy=train_policy,
+            test_policy=test_policy,
+            memory=memory,
+            processor=atari_agent.processor,
+            nb_steps_warmup=spec.steps_warmup,
+            gamma=spec.gamma,
+            batch_size=spec.batch_size,
+            train_interval=spec.train_interval,
+            target_model_update=10000,
+            delta_clip=1.0,
+        )
+        dqn.compile(
+            optimizer=Adam(lr=spec.learning_rate),
+            metrics=["mae"]
+        )
 
-        # Setup for streaming
-        if self.streaming:
-            self.sender = AtariFramesSender(args.env)
+        return dqn
 
     def train(self):
         """Train."""
 
-        print("> Training")
-        print("Watch it on Tensorboard, or from --stream.")
+        # Resume?
+        if self.cont:
+            self.saver.load(self.cont)
 
-        # Training loop
-        while True:
+        # Go
+        self.kerasrl_agent.fit(
+            self.env, callbacks=self.callbacks, nb_steps=2000000,
+            log_interval=10000)
 
-            # Do
-            queries = self.train_episode()
+        # Save final weights
+        self.saver.save()
 
-            print(queries, end="          \r")
 
-    def train_episode(self):
-        """Train on a single episode.
+class CheckpointSaver(Callback):
+    """Save weights and restore.
 
-        :return: a dict of queried tensors
+    This class can be used as a callback or directly.
+    """
+
+    def __init__(self, agent, path, interval):
+        """Initialize.
+
+        :param agent: a keras-rl agent
+        :param path: directory of checkpoints
+        :param interval: save frequency in number of steps
         """
 
-        # Init episode
-        state = self.env.reset()
-        terminal = False
+        # Super
+        Callback.__init__(self)
 
-        act_queries = ["exploration"]
-        observe_queries = ["episode", "timestep"]
+        # Store
+        self.agent = agent
+        self.interval = interval
+        self.checkpoint = os.path.join(path, "weights.h5f")
+        self.step_checkpoints = os.path.join(path, "weights_{step}.h5f")
+        self.steps = 0      # Number of trained steps before saving
 
-        # Iterate steps
-        while not terminal:
+    def save(self, step=None):
+        """Save.
 
-            # Agent's turn
-            action, act_tensors = self.agent.act(
-                states=state, query=act_queries)
+        :param step: if given, the step is appended to the filename
+        """
 
-            # Environment's turn
-            state, terminal, reward = self.env.execute(actions=action)
+        filepath = self.step_checkpoints.format(step=step) \
+            if step else self.checkpoint
+        self.agent.save_weights(filepath, overwrite=True)
 
-            # Learn
-            _, observe_tensors = self.agent.observe(
-                terminal=terminal, reward=reward, query=observe_queries)
+    def load(self, step=None):
+        """Load the weights from a checkpoint.
 
-            # Stream?
-            if self.streaming:
-                self.sender.send(state)
+        :param step: if given, loads from a particular step, otherwise from
+            the default (without step) file. True and None mean no step.
+        """
 
-        # Queries at the end of episode
-        tensors = dict(zip(act_queries, act_tensors))
-        tensors.update(dict(zip(observe_queries, observe_tensors)))
-        return tensors
+        if step is True or step is None:
+            filepath = self.checkpoint
+        else:
+            filepath = self.step_checkpoints.format(step=step)
+
+        self.agent.load_weights(filepath)
+        print("> Loaded:", filepath)
+
+    def on_step_end(self, step, logs={}):
+        """Keras-rl callback api."""
+
+        self.steps += 1     # can't use step argument
+        if self.steps % self.interval != 0:
+            return
+
+        self.save(self.steps)

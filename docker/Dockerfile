@@ -1,7 +1,7 @@
 # Inside the server, I'll use docker, instead of pipenv.
 
 # This image is just for development:
-# I'm not copying the source files, because I'm expecting
+# I'm not copying the source files, because I expect
 # a bind mount somewere inside the container.
 
 FROM tensorflow/tensorflow:2.1.0-gpu-py3
@@ -21,14 +21,21 @@ RUN apt-get -y update && \
 apt-get -y upgrade
 
 # Project dependencies
-RUN apt-get -y install python3-pip bash-completion tmux git \
-libsm6 libxrender-dev
 
-RUN pip3 --no-cache-dir install -U wheel setuptools pip && \
-pip3 --no-cache-dir install -U ipython flake8 pipenv-setup \
-opencv-python numpy gym[atari] \
--e git+https://github.com/tensorforce/tensorforce.git@0.5.4#egg=tensorforce
+# Basics
+RUN apt-get -y install python3-pip bash-completion git 
+# Opencv
+RUN apt-get -y install libsm6 libxrender-dev
 
+# Basics
+RUN pip3 --no-cache-dir install -U wheel setuptools pip
+# [dev-packages]
+RUN pip3 --no-cache-dir install ipython flake8 pipenv-setup
+# [packages] (tensorflow is already there)
+RUN pip3 --no-cache-dir install opencv-python numpy gym[atari]
+RUN pip3 --no-cache-dir install -e git+https://github.com/cipollone/keras-rl.git@tf2-keras#egg=keras-rl  # should be @09e9f50
+
+# Go
 USER ubuntu
 
 ENV PATH="/home/ubuntu/bin:/home/ubuntu/.local/bin:$PATH"

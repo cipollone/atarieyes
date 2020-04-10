@@ -13,19 +13,18 @@ def main():
 
     # Defaults
     features_defaults = dict(
-        batch=10,
+        batch_size=10,
         log_frequency=20,
         learning_rate=1e-3,
     )
     agent_defaults = dict(
-        batch=50,
-        log_frequency=50,
-        save_frequency=5*60,
-        learning_rate=1e-5,
-        learning_rate_episodes=50,
-        discount=1.0,
-        episode_steps=500,
-        exploration_episodes=100,
+        memory_limit=1000000,
+        learning_rate=0.00025,
+        steps_warmup=50000,
+        gamma=0.99,
+        save_frequency=200000,
+        batch_size=32,
+        train_interval=4,
     )
 
     parser = argparse.ArgumentParser(
@@ -64,59 +63,43 @@ def main():
         help="Identifier of a Gym environment")
     agent_train.add_argument(
         "-r", "--rate", type=float, default=agent_defaults["learning_rate"],
-        help="Learning rate")
+        dest="learning_rate", help="Learning rate")
     agent_train.add_argument(
-        "--rate-episodes", type=int,
-        default=agent_defaults["learning_rate_episodes"],
-        help="Number of episodes after which learning rate halves. "
-        "Pass 0 to set a constant rate.")
-    agent_train.add_argument(
-        "-b", "--batch", type=int, default=agent_defaults["batch"],
-        help="Training batch size")
-    agent_train.add_argument(
-        "-l", "--log-frequency", type=int,
-        default=agent_defaults["log_frequency"],
-        help="Save TensorBorad after this number of STEPS")
-    agent_train.add_argument(
-        "-s", "--save-frequency", type=int,
-        default=agent_defaults["save_frequency"],
-        help="Save the agent after this number of SECONDS")
-    agent_train.add_argument(
-        "-M", "--max-episode_steps", type=int,
-        default=agent_defaults["episode_steps"],
-        help="Max length of each episode. Note: this also affects memory.")
-    agent_train.add_argument(
-        "-d", "--discount", type=float, default=agent_defaults["discount"],
+        "-g", "--gamma", type=float, default=agent_defaults["gamma"],
         help="RL discount factor")
     agent_train.add_argument(
-        "-c", "--continue", action="store_true", dest="cont",
-        help="Continue from previous training")
+        "-b", "--batch", type=int, default=agent_defaults["batch_size"],
+        dest="batch_size", help="Training batch size")
     agent_train.add_argument(
-        "--render", action="store_true", help="Render while training")
+        "-c", "--continue", dest="cont", default=False, const=True, nargs="?",
+        metavar="STEP", help="Continue from previous checkpoint.")
     agent_train.add_argument(
-        "--expl-episodes", type=int,
-        default=agent_defaults["exploration_episodes"],
-        help="Number of episodes after which exproration rate halves")
+        "-d", "--deterministic", action="store_true",
+        help="Set a constant seed to ensure repeatability")
     agent_train.add_argument(
-        "--stream", action="store_true",
-        help='Generate a stream of frames. See "agent watch -h"')
+        "-m", "--memory", type=int, default=agent_defaults["memory_limit"],
+        dest="memory_limit", help="Maximum size of the replay memory")
+    agent_train.add_argument(
+        "-s", "--saves", type=int, default=agent_defaults["save_frequency"],
+        help="Save models after this number of steps")
+    agent_train.add_argument(
+        "-t", "--train-interval", type=int,
+        default=agent_defaults["train_interval"],
+        help="Train every <t> number of steps/observations")
+    agent_train.add_argument(
+        "--warmup", type=int, default=agent_defaults["steps_warmup"],
+        dest="steps_warmup", help="Number of observations to collect "
+        "before training")
 
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
 
     agent_play.add_argument(
-        "-e", "--env", type=_gym_environment_arg, required=True,
-        help="Identifier of a Gym environment")
+        "args_file", type=str, help="Json file of arguments")
     agent_play.add_argument(
-        "-a", "--agent", type=str, required=True,
-        help="Model directory of the trained agent. "
-        "Usually something like: models/agent/<env_name>/ ")
-    agent_play.add_argument(
-        "-M", "--max-episode_steps", type=int,
-        default=agent_defaults["episode_steps"],
-        help="Max length of each episode")
+        "-s", "--step", type=int, help="Step number of the checkpoint to load")
 
-    # Agent play op
+    # Agent watch op
     agent_watch = agent_op.add_parser(
         "watch", help="Display a frames while an agent is training")
 
@@ -143,8 +126,8 @@ def main():
     features_train.add_argument(
         "--render", action="store_true", help="Render while training")
     features_train.add_argument(
-        "-b", "--batch", type=int, default=features_defaults["batch"],
-        help="Training batch size")
+        "-b", "--batch", type=int, default=features_defaults["batch_size"],
+        dest="batch_size", help="Training batch size")
     features_train.add_argument(
         "-l", "--logs", type=int, default=features_defaults["log_frequency"],
         help="Save logs after this number of batches")
@@ -153,7 +136,7 @@ def main():
         help="Continue from previous training")
     features_train.add_argument(
         "-r", "--rate", type=float, default=features_defaults["learning_rate"],
-        help="Learning rate")
+        dest="learning_rate", help="Learning rate")
 
     # Feature selection op
     feature_select = features_op.add_parser(
@@ -184,9 +167,6 @@ def main():
             import atarieyes.features.selector as features_selector
             features_selector.selection_tool(args)
 
-    # ^ imports are here because Tensorforce startup settings for TensorFlow
-    #   are not compatible with mine.
-
 
 def _environment_names():
     """Return the available list of environments."""
@@ -201,7 +181,7 @@ def _gym_environment_arg(name):
 
     # Check
     if name not in _environment_names():
-        msg = name + ' is not a Gym environment.'
+        msg = name + " is not a Gym environment."
         raise argparse.ArgumentTypeError(msg)
 
     # Don't build yet

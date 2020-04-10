@@ -1,7 +1,9 @@
 """Play with a trained agent."""
 
-from tensorforce.environments import Environment
-from tensorforce.agents import Agent
+import gym
+
+from atarieyes.tools import ArgumentSaver, Namespace, prepare_directories
+from atarieyes.agent.training import Trainer, CheckpointSaver
 
 
 class Player:
@@ -14,49 +16,45 @@ class Player:
     def __init__(self, args):
         """Initialize.
 
+        The agent is reconstructed from a json of saved arguments.
+        If args_file is: "logs/agent/BreakoutDeterministic-v4/0/args.json",
+        the weights are loaded from a checkpoint in
+        "models/agent/BreakoutDeterministic-v4/".
+
         :param args: namespace of arguments; see --help.
         """
 
-        # Define (hopefully the same) environment
-        self.env = Environment.create(
-            environment="gym", level=args.env,
-            max_episode_steps=args.max_episode_steps
-        )
-        self.env.visualize = True
+        # Load the arguments
+        agent_args = ArgumentSaver.load(args.args_file)
 
-        # Load the agent
-        self.agent = Agent.load(
-            directory=args.agent, filename="agent", format="tensorflow",
-            environment=self.env)
-        print("> Weights restored.")
+        # Check that this was a trained agent
+        if agent_args.what != "agent" or agent_args.op != "train":
+            raise RuntimeError(
+                "Arguments must represent a `atarieyes agent train ...` "
+                "command")
+
+        # Dirs
+        model_path, log_path = prepare_directories(
+            "agent", agent_args.env, no_create=True)
+
+        # Environment
+        self.env = gym.make(agent_args.env)
+        self.env_name = agent_args.env
+
+        # Agent
+        self.kerasrl_agent = Trainer.build_agent(
+            Namespace(agent_args, n_actions=self.env.action_space.n))
+
+        # Load weights
+        saver = CheckpointSaver(
+            agent=self.kerasrl_agent, path=model_path,
+            interval=agent_args.saves
+        )
+        saver.load(args.step)
 
     def play(self):
         """Play."""
 
-        episode = 0
-
-        while True:
-
-            print("Episode", episode, end="     \r")
-            episode += 1
-
-            # Run
-            self.run_episode()
-
-    def run_episode(self):
-        """Execute a single episode."""
-
-        # Init episode
-        state = self.env.reset()
-        internals = self.agent.initial_internals()
-        terminal = False
-
-        # Iterate steps
-        while not terminal:
-
-            # Agent's turn
-            action, internals = self.agent.act(
-                states=state, internals=internals, evaluation=True)
-
-            # Environment's turn
-            state, terminal, reward = self.env.execute(actions=action)
+        # Go
+        self.kerasrl_agent.test(
+            self.env, nb_episodes=1000, visualize=True)

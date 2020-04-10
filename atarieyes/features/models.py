@@ -1,10 +1,10 @@
-"""Definitions for all models."""
+"""Definitions of networks used for feature extraction."""
 
 from abc import abstractmethod
 import tensorflow as tf
 
-from atarieyes.features import layers
-from atarieyes.features.layers import BaseLayer
+from atarieyes import layers
+from atarieyes.layers import BaseLayer
 from atarieyes.tools import ABC2, AbstractAttribute
 
 
@@ -18,7 +18,7 @@ class Model(ABC2):
     The `keras` attribute is a keras model.
     """
 
-    # This is the compiled keras model
+    # This is the keras model
     keras = AbstractAttribute()
 
     @abstractmethod
@@ -76,7 +76,7 @@ class FrameAutoencoder(Model):
         outputs = (*ret["outputs"], ret["loss"])
 
         model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name='frame_autoencoder')
+            inputs=inputs, outputs=outputs, name="frame_autoencoder")
         model.summary()
 
         # Store
