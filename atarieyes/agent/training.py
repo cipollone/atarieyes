@@ -9,7 +9,7 @@ from rl.agents.dqn import DQNAgent
 from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.callbacks import Callback, FileLogger
 
-from atarieyes.tools import prepare_directories
+from atarieyes.tools import Namespace, prepare_directories
 from atarieyes.agent.models import AtariAgent
 
 
@@ -22,24 +22,17 @@ class Trainer:
         :param args: namespace of arguments; see --help.
         """
 
-        # Store
-        self.memory_limit = args.memory
-        self.learning_rate = args.rate
-        self.steps_warmup = args.warmup
-        self.gamma = args.gamma
-        self.batch_size = args.batch
-        self.train_interval = args.train_interval
         self.cont = args.cont
 
         # Dirs
         model_path, log_path = prepare_directories(
             "agent", args.env, resuming=self.cont, args=args)
         log_filename = "log.json"
-        self.log_file = os.path.join(log_path, log_filename) # TODO: TB logger?
+        self.log_file = os.path.join(log_path, log_filename)  # TODO: TB logger?
 
         # Environment
-        self.env_name = args.env
         self.env = gym.make(args.env)
+        self.env_name = args.env
 
         # Repeatability
         if args.deterministic:
@@ -51,7 +44,8 @@ class Trainer:
             np.random.seed(30013)
 
         # Agent
-        self.kerasrl_agent = self.build_agent()
+        self.kerasrl_agent = self.build_agent(
+            Namespace(args, n_actions=self.env.action_space.n))
 
         # Tools
         self.saver = CheckpointSaver(
@@ -63,43 +57,47 @@ class Trainer:
             FileLogger(filepath=self.log_file, interval=100),
         ]
 
-    def build_agent(self):
+    @staticmethod
+    def build_agent(spec):
         """Defines a Keras-rl agent, ready for training.
 
+        :param spec: a Namespace of agent specification options.
         :return: the rl agent
         """
 
         # Samples are extracted from memory, not observed directly
         memory = SequentialMemory(
-            limit=self.memory_limit, window_length=AtariAgent.window_length)
+            limit=spec.memory_limit, window_length=AtariAgent.window_length)
 
         # Linear dicrease of greedy actions
-        policy = LinearAnnealedPolicy(
-            EpsGreedyQPolicy(), attr="eps", value_max=1., value_min=.1,
-            value_test=.05, nb_steps=1000000
+        train_policy = LinearAnnealedPolicy(
+            EpsGreedyQPolicy(), attr="eps", value_max=1.0, value_min=0.1,
+            value_test=0.05, nb_steps=1000000
         )
+        test_policy = EpsGreedyQPolicy(eps=0.05)
 
         # Define network for Atari games
-        atari_agent = AtariAgent(n_actions=self.env.action_space.n)
+        atari_agent = AtariAgent(n_actions=spec.n_actions)
 
         # RL agent
         dqn = DQNAgent(
             model=atari_agent.model,
             enable_double_dqn=True,
             enable_dueling_network=False,
-            nb_actions=self.env.action_space.n,
-            policy=policy,
+            nb_actions=spec.n_actions,
+            policy=train_policy,
+            test_policy=test_policy,
             memory=memory,
             processor=atari_agent.processor,
-            nb_steps_warmup=self.steps_warmup,
-            gamma=self.gamma,
-            batch_size=self.batch_size,
-            train_interval=self.train_interval,
+            nb_steps_warmup=spec.steps_warmup,
+            gamma=spec.gamma,
+            batch_size=spec.batch_size,
+            train_interval=spec.train_interval,
             target_model_update=10000,
             delta_clip=1.0,
         )
         dqn.compile(
-            optimizer=Adam(lr=self.learning_rate),
+            optimizer=Adam(lr=spec.learning_rate),
             metrics=["mae"]
         )
 
@@ -123,7 +121,7 @@ class Trainer:
 
 class CheckpointSaver(Callback):
     """Save weights and restore.
-    
+
     This class can be used as a callback or directly.
     """
 

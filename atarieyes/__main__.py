@@ -13,7 +13,7 @@ def main():
 
     # Defaults
     features_defaults = dict(
-        batch=10,
+        batch_size=10,
         log_frequency=20,
         learning_rate=1e-3,
     )
@@ -63,13 +63,13 @@ def main():
         help="Identifier of a Gym environment")
     agent_train.add_argument(
         "-r", "--rate", type=float, default=agent_defaults["learning_rate"],
-        help="Learning rate")
+        dest="learning_rate", help="Learning rate")
     agent_train.add_argument(
         "-g", "--gamma", type=float, default=agent_defaults["gamma"],
         help="RL discount factor")
     agent_train.add_argument(
         "-b", "--batch", type=int, default=agent_defaults["batch_size"],
-        help="Training batch size")
+        dest="batch_size", help="Training batch size")
     agent_train.add_argument(
         "-c", "--continue", dest="cont", default=False, const=True, nargs="?",
         metavar="STEP", help="Continue from previous checkpoint.")
@@ -78,7 +78,7 @@ def main():
         help="Set a constant seed to ensure repeatability")
     agent_train.add_argument(
         "-m", "--memory", type=int, default=agent_defaults["memory_limit"],
-        help="Maximum size of the replay memory")
+        dest="memory_limit", help="Maximum size of the replay memory")
     agent_train.add_argument(
         "-s", "--saves", type=int, default=agent_defaults["save_frequency"],
         help="Save models after this number of steps")
@@ -88,14 +88,16 @@ def main():
         help="Train every <t> number of steps/observations")
     agent_train.add_argument(
         "--warmup", type=int, default=agent_defaults["steps_warmup"],
-        help="Number of observations to collect before training")
+        dest="steps_warmup", help="Number of observations to collect "
+        "before training")
 
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
 
     agent_play.add_argument(
-        "-e", "--env", type=_gym_environment_arg, required=True,
-        help="Identifier of a Gym environment")
+        "args_file", type=str, help="Json file of arguments")
+    agent_play.add_argument(
+        "-s", "--step", type=int, help="Step number of the checkpoint to load")
 
     # Agent watch op
     agent_watch = agent_op.add_parser(
@@ -124,8 +126,8 @@ def main():
     features_train.add_argument(
         "--render", action="store_true", help="Render while training")
     features_train.add_argument(
-        "-b", "--batch", type=int, default=features_defaults["batch"],
-        help="Training batch size")
+        "-b", "--batch", type=int, default=features_defaults["batch_size"],
+        dest="batch_size", help="Training batch size")
     features_train.add_argument(
         "-l", "--logs", type=int, default=features_defaults["log_frequency"],
         help="Save logs after this number of batches")
@@ -134,7 +136,7 @@ def main():
         help="Continue from previous training")
     features_train.add_argument(
         "-r", "--rate", type=float, default=features_defaults["learning_rate"],
-        help="Learning rate")
+        dest="learning_rate", help="Learning rate")
 
     # Feature selection op
     feature_select = features_op.add_parser(
