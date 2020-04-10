@@ -1,11 +1,10 @@
 Things TODO:
 
 >Agent:
-- Migrate to tf.keras
-- Push changes in keras-rl
-- Integrate the working example with project
-- Define your custom callbacks
-- Add all previous __main__ arguments such as --render, --stream
+- Resuming from wrong step. Also policy does not resumes correctly.
+- Fix keras-rl graph saving
+- Tensorboard logs
+- Render or streaming?
 
 >Features:
 - predict function to how the features work
@@ -23,3 +22,10 @@ Things done:
 
 Notes:
 - In breakout, rewards are given at each brocken brick 
+- Normalization and initialization are important for deep nets!
+- Be careful with the loss function for the autoencoder:
+	the internal features should be meaningful (i.e. contain fluents).
+	Also, do not train the autoencoder alone, but toghether with other losses.
+	Use sparsity constraints (regularization loss?) (maybe not necessary with binary data)
+	Prefer conv2d maxpooling and upsampling2d
+

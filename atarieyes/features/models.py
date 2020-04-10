@@ -18,7 +18,7 @@ class Model(ABC2):
     The `keras` attribute is a keras model.
     """
 
-    # This is the compiled keras model
+    # This is the keras model
     keras = AbstractAttribute()
 
     @abstractmethod
@@ -76,7 +76,7 @@ class FrameAutoencoder(Model):
         outputs = (*ret["outputs"], ret["loss"])
 
         model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name='frame_autoencoder')
+            inputs=inputs, outputs=outputs, name="frame_autoencoder")
         model.summary()
 
         # Store

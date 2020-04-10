@@ -5,6 +5,7 @@ import signal
 import os
 import json
 import shutil
+import argparse
 
 
 class ABCMeta2(ABCMeta):
@@ -42,8 +43,8 @@ class ABCMeta2(ABCMeta):
                 not_defined.append(attr)
         if not_defined:
             raise TypeError(
-                "class __init__ did not define these abstract attributes:\n" +
-                str(not_defined))
+                Class.__name__ + ".__init__ did not define these abstract "
+                "attributes:\n" + str(not_defined))
 
         return instance
 
@@ -124,19 +125,55 @@ class ArgumentSaver:
             json.dump(vars(args), f, indent=4)
 
     @staticmethod
-    def load(path, args):
+    def load(path, args=None):
         """Loads arguments from file.
 
         :param path: source file path
-        :param args: destination argparse.Namespace
+        :param args: destination argparse.Namespace. If None, create one.
+        :return: args or the new namespace
         """
+
+        if args is None:
+            args = argparse.Namespace()
 
         with open(path) as f:
             data = json.load(f)
         args.__dict__.update(data)
 
+        return args
 
-def prepare_directories(what, env_name, resuming=False, args=None):
+
+class Namespace(argparse.Namespace):
+    """Simple Namespace class."""
+
+    def __init__(self, *args, **kwargs):
+        """Initialize.
+
+        :param args: only one positional argument:
+            namespace: argparse.Namespace to copy (optional)
+        :param kwargs: attributes to set
+        """
+
+        if args:
+            if len(args) > 1 or not isinstance(args[0], argparse.Namespace):
+                raise TypeError(
+                    "Only one positional argument is allowed: r Namespace.")
+            namespace = args[0]
+            self.__dict__.update(namespace.__dict__)
+
+        self.__dict__.update(kwargs)
+
+    def __iter__(self):
+        """Iterate over (key, value) tuples; we can create a dict with this."""
+
+        for pair in self.__dict__.items():
+            assert pair[0] in self
+            yield pair
+
+
+def prepare_directories(
+    what, env_name, resuming=False, args=None, no_create=False
+):
     """Prepare the directories where weights and logs are saved.
 
     :param what: what is trained, usually 'agent' or 'features'.
@@ -145,8 +182,13 @@ def prepare_directories(what, env_name, resuming=False, args=None):
     :param resuming: if True, the directories are not deleted.
     :param args: argsparse.Namespace of arguments. If given, this is saved
         to 'args' file inside the log directory.
+    :param no_create: do not touch the files; just return the current paths
+        (implies resuming).
     :return: two paths, respectively for models and logs.
     """
+
+    if no_create:
+        resuming = True
 
     # Choose diretories
     models_path = os.path.join("models", what, env_name)
@@ -174,6 +216,15 @@ def prepare_directories(what, env_name, resuming=False, args=None):
     while os.path.exists(os.path.join(logs_path, str(i))):
         i += 1
     log_path = os.path.join(logs_path, str(i))
+
+    # Return current
+    if no_create:
+        last_log_path = os.path.join(logs_path, str(i-1))
+        if i == 0 or not os.path.exists(last_log_path):
+            raise RuntimeError("Dirs should be created first")
+        return (models_path, last_log_path)
+
+    # New log
     os.mkdir(log_path)
 
     # Save arguments
