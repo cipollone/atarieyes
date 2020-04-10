@@ -28,7 +28,7 @@ class Trainer:
         model_path, log_path = prepare_directories(
             "agent", args.env, resuming=self.cont, args=args)
         log_filename = "log.json"
-        self.log_file = os.path.join(log_path, log_filename)  # TODO: TB logger?
+        self.log_file = os.path.join(log_path, log_filename)  # TODO: TB logger
 
         # Environment
         self.env = gym.make(args.env)

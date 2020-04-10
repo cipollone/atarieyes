@@ -1,6 +1,5 @@
 """Play with a trained agent."""
 
-import os
 import gym
 
 from atarieyes.tools import ArgumentSaver, Namespace, prepare_directories
@@ -52,7 +51,6 @@ class Player:
             interval=agent_args.saves
         )
         saver.load(args.step)
-
 
     def play(self):
         """Play."""

@@ -156,8 +156,8 @@ class Namespace(argparse.Namespace):
 
         if args:
             if len(args) > 1 or not isinstance(args[0], argparse.Namespace):
-                raise TypeError("Only one positional argument is allowed: "
-                    "a Namespace.")
+                raise TypeError(
+                    "Only one positional argument is allowed: r Namespace.")
             namespace = args[0]
             self.__dict__.update(namespace.__dict__)
 
