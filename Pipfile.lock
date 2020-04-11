@@ -214,7 +214,7 @@
         "keras-rl": {
             "editable": true,
             "git": "https://github.com/cipollone/keras-rl.git",
-            "ref": "09e9f509047f093791f910ec31af082c9662c1aa"
+            "ref": "310285511beb134c9ab521e2ac6b36eab0a48bdb"
         },
         "markdown": {
             "hashes": [

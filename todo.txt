@@ -1,8 +1,6 @@
 Things TODO:
 
 >Agent:
-- Debug keras-rl graph optimization error
-- Resuming from wrong step. Also policy does not resumes correctly.
 - Maybe train with crop
 
 >Features:

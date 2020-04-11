@@ -48,9 +48,9 @@ class Player:
         # Load weights
         saver = CheckpointSaver(
             agent=self.kerasrl_agent, path=model_path,
-            interval=agent_args.saves
+            interval=agent_args.saves,
         )
-        saver.load(args.step)
+        saver.load(args.cont)
 
     def play(self):
         """Play."""

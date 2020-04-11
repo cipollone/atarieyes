@@ -2,6 +2,7 @@
 
 import os
 import numpy as np
+import json
 import gym
 import tensorflow as tf
 from keras.optimizers import Adam
@@ -110,13 +111,14 @@ class Trainer:
         """Train."""
 
         # Resume?
+        init_step, init_episode = 0, 0
         if self.cont:
-            self.saver.load(self.cont)
+            init_step, init_episode = self.saver.load(self.cont)
 
         # Go
         self.kerasrl_agent.fit(
             self.env, callbacks=self.callbacks, nb_steps=2000000,
-            log_interval=10000)
+            log_interval=10000, init_step=init_step, init_episode=init_episode)
 
         # Save final weights
         self.saver.save()
@@ -142,43 +144,78 @@ class CheckpointSaver(Callback):
         # Store
         self.agent = agent
         self.interval = interval
-        self.checkpoint = os.path.join(path, "weights.h5f")
+        self.init_step = 0
+        self.step = 0
+        self.episode = 0
+
+        self.counters_file = os.path.join(path, "counters.json")
         self.step_checkpoints = os.path.join(path, "weights_{step}.h5f")
-        self.steps = 0      # Number of trained steps before saving
 
-    def save(self, step=None):
-        """Save.
+    def _update_counters(self, filepath):
+        """Updates the file of counters with a new entry.
 
-        :param step: if given, the step is appended to the filename
+        Counters is a json file which associates each checkpoint to
+        an episode and step. The file may not exist.
+
+        :param filepath: checkpoint that is being saved
         """
 
-        filepath = self.step_checkpoints.format(step=step) \
-            if step else self.checkpoint
-        self.agent.save_weights(filepath, overwrite=True)
+        counters = {}
 
-    def load(self, step=None):
+        # Load
+        if os.path.exists(self.counters_file):
+            with open(self.counters_file) as f:
+                counters = json.load(f)
+
+        counters[filepath] = dict(episode=self.episode, step=self.step)
+
+        # Save
+        with open(self.counters_file, "w") as f:
+            json.dump(counters, f, indent=4)
+
+    def save(self):
+        """Save now."""
+
+        filepath = self.step_checkpoints.format(step=self.step)
+
+        self.agent.save_weights(filepath, overwrite=True)
+        self._update_counters(filepath)
+
+    def load(self, step):
         """Load the weights from a checkpoint.
 
-        :param step: if given, loads from a particular step, otherwise from
-            the default (without step) file. True and None mean no step.
+        :param step: specify which checkpoint to load
+        :return: tuple of (step, episode) of the restored checkpoint instant
         """
 
-        if step is True or step is None:
-            filepath = self.checkpoint
-        else:
-            filepath = self.step_checkpoints.format(step=step)
+        filepath = self.step_checkpoints.format(step=step)
 
+        # Weights
         self.agent.load_weights(filepath)
-        print("> Loaded:", filepath)
 
-    def on_step_end(self, step, logs={}):
+        # Counters
+        with open(self.counters_file) as f:
+            counters = json.load(f)
+        self.step, self.episode = [
+            counters[filepath][i] for i in ("step", "episode")]
+        self.init_step = self.step
+
+        print("> Loaded:", filepath)
+        return self.step, self.episode
+
+    def on_step_end(self, episode_step, logs={}):
         """Keras-rl callback api."""
 
-        self.steps += 1     # can't use step argument
-        if self.steps % self.interval != 0:
+        self.step += 1
+        if (self.step - self.init_step) % self.interval != 0:
             return
 
-        self.save(self.steps)
+        self.save()
+
+    def on_episode_end(self, episode, logs={}):
+        """Called at end of each episode"""
+
+        self.episode += 1
 
 
 class TensorboardLogger(Callback):
@@ -209,7 +246,7 @@ class TensorboardLogger(Callback):
         if name == "action":
             return np.bincount(values) / len(values)
         else:
-            return np.mean(values, axis=0)  # maybe np.nanmean is better?
+            return np.mean(values, axis=0) if values else None
 
     @staticmethod
     def _process_step_metrics(metrics):
@@ -245,14 +282,15 @@ class TensorboardLogger(Callback):
         data = self._episode_data[episode]
         step_metrics = {
             name: self._reduce_step_metrics(name, data[name])
-                for name in self._step_metrics}
+            for name in self._step_metrics}
         step_metrics = self._process_step_metrics(step_metrics)
 
         # Model metrics
         model_metrics_values = step_metrics.pop("metrics")
-        model_metrics = {
+        model_metrics = ({
             name: value for name, value in
             zip(self._model_metrics, model_metrics_values)}
+                if model_metrics_values is not None else {})
 
         # Join all
         metrics = dict(
@@ -297,7 +335,7 @@ class TensorboardLogger(Callback):
 
     def save_graph(self, model):
         """Saves the graph of the Q network of the agent in Tensorboard.
-        
+
         :param model: a keras model
         """
         # NOTE: This function have a side effect that causes an exception
