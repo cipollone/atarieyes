@@ -1,10 +1,9 @@
 Things TODO:
 
 >Agent:
+- Debug keras-rl graph optimization error
 - Resuming from wrong step. Also policy does not resumes correctly.
-- Fix keras-rl graph saving
-- Tensorboard logs
-- Render or streaming?
+- Maybe train with crop
 
 >Features:
 - predict function to how the features work
@@ -14,7 +13,6 @@ Things TODO:
 Things done:
 - Simple autoencoder
 - Crop the game board to the relevant part
-- Tensorforce for DQN
 - Trained features and agent on server
 - Player.play()
 - Decaying exploration rate
