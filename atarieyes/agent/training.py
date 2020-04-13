@@ -227,6 +227,9 @@ class TensorboardLogger(Callback):
         :param logdir: directory of tensorboard logs
         """
 
+        # Super
+        Callback.__init__(self)
+
         # Dict {episode: data}
         #   where data is a dict of metrics accumulated during an episode
         #   {metric_name: episode_values}

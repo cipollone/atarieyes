@@ -1,7 +1,9 @@
 Things TODO:
 
 >Agent:
+- Train agent to test removed deepcopies
 - Maybe train with crop
+- Train agent with crop
 
 >Features:
 - predict function to how the features work
