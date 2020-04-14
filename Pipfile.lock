@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "73e9f263eae1cf20bedb0d7c2026fd9d2fb893a36e861fcd968e095a20841a78"
+            "sha256": "d8b6eec188ec437e2c56b7732e32bc076d0dc8fce7ab3a8aeaefd5d23c90324d"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -214,7 +214,7 @@
         "keras-rl": {
             "editable": true,
             "git": "https://github.com/cipollone/keras-rl.git",
-            "ref": "8e6423e50541d9a6da82b74498d8b5cd2cd269f4"
+            "ref": "6f2c5af307ee38b1a5af96681b225ce8ccea0713"
         },
         "markdown": {
             "hashes": [
@@ -453,7 +453,7 @@
                 "sha256:e877fbf373d5be42fb118269df1670b8d3c0df9be223904a2584a8f8ed23b082"
             ],
             "index": "pypi",
-            "version": "==2.1"
+            "version": "==2.1.0"
         },
         "tensorflow-estimator": {
             "hashes": [
@@ -655,10 +655,10 @@
         },
         "parso": {
             "hashes": [
-                "sha256:0c5659e0c6eba20636f99a04f469798dca8da279645ce5c387315b2c23912157",
-                "sha256:8515fc12cfca6ee3aa59138741fc5624d62340c97e401c74875769948d4f2995"
+                "sha256:158c140fc04112dc45bca311633ae5033c2c2a7b732fa33d0955bad8152a8dd0",
+                "sha256:908e9fae2144a076d72ae4e25539143d40b8e3eafbaeae03c1bfe226f4cdf12c"
             ],
-            "version": "==0.6.2"
+            "version": "==0.7.0"
         },
         "pathspec": {
             "hashes": [

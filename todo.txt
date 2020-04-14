@@ -1,9 +1,12 @@
 Things TODO:
 
 >Agent:
-- Train agent to test removed deepcopies
-- Maybe train with crop
-- Train agent with crop
++ Update keras-rl dependency
+- Save previous runs
+- Deterministic training with tf.keras
+	from checkpoint. If they match, commit.
+- Train with crop and train new agent
+- Retrain
 
 >Features:
 - predict function to how the features work
