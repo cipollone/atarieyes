@@ -5,7 +5,7 @@ import numpy as np
 import json
 import gym
 import tensorflow as tf
-from keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam
 from rl.memory import SequentialMemory
 from rl.agents.dqn import DQNAgent
 from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
@@ -44,6 +44,7 @@ class Trainer:
                     " environments")
             self.env.seed(30013)
             np.random.seed(30013)
+            tf.random.set_seed(30013)
 
         # Agent
         self.kerasrl_agent = self.build_agent(

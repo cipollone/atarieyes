@@ -56,6 +56,7 @@ class Player:
                     " environments")
             self.env.seed(30013)
             np.random.seed(30013)
+            tf.random.set_seed(30013)
 
         # Agent
         self.kerasrl_agent = Trainer.build_agent(
