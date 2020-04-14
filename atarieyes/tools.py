@@ -3,6 +3,8 @@
 from abc import ABCMeta
 import signal
 import os
+import sys
+import traceback
 import json
 import shutil
 import argparse
@@ -110,6 +112,67 @@ class QuitWithResources:
         QuitWithResources.__deleters.pop(name)
 
 
+class TracePrints:
+    """Print the stack trace for each print in this context manager."""
+
+    def __init__(self, stdout=True, stderr=True):
+        """Initialize.
+
+        :param stdout: True to intercept stdout
+        :param stderr: True to intercept stderr
+        """
+
+        self.do_stdout = stdout
+        self.do_stderr = stderr
+
+        self.__stdout = None
+        self.__stderr = None
+
+    def __enter__(self):
+        """Enter."""
+
+        if self.do_stdout:
+            assert self.__stdout is None
+            self.__stdout = sys.stdout
+            sys.stdout = self.TracingOutStream(to=self.__stdout)
+        if self.do_stderr:
+            assert self.__stderr is None
+            self.__stderr = sys.stderr
+            sys.stderr = self.TracingOutStream(to=self.__stderr)
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        """Exit."""
+
+        if self.do_stdout:
+            assert self.__stdout is not None
+            sys.stdout = self.__stdout
+            self.__stdout = None
+        if self.do_stderr:
+            assert self.__stderr is not None
+            sys.stderr = self.__stderr
+            self.__stderr = None
+
+    class TracingOutStream:
+        """Output stream."""
+
+        def __init__(self, to):
+            """Initialize.
+
+            :param to: output stream
+            """
+
+            self.__to = to
+
+        def write(self, s):
+            """Write a string and print traceback."""
+
+            self.__to.write("---\n:Writing\n" + s + "\n:At\n")
+            traceback.print_stack(file=self.__to)
+
+        def __getattr__(self, attr):
+            return getattr(self.__to, attr)
+
+
 class ArgumentSaver:
     """Saves and loads command line arguments."""
 
@@ -179,7 +242,7 @@ def prepare_directories(
     :param what: what is trained, usually 'agent' or 'features'.
     :param env_name: the actual paths are a composition of
         'what' and 'env_name'.
-    :param resuming: if True, the directories are not deleted.
+    :param resuming: if true, the directories are not deleted.
     :param args: argsparse.Namespace of arguments. If given, this is saved
         to 'args' file inside the log directory.
     :param no_create: do not touch the files; just return the current paths

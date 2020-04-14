@@ -74,7 +74,7 @@ class AtariAgent(QAgentDef):
             Dense(512),
             Activation("relu"),
             Dense(self.n_actions),
-        ])
+        ], name="Agent_net")
         model.summary()
 
         return model

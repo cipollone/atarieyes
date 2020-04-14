@@ -1,10 +1,9 @@
 Things TODO:
 
 >Agent:
-- Resuming from wrong step. Also policy does not resumes correctly.
-- Fix keras-rl graph saving
-- Tensorboard logs
-- Render or streaming?
+- Train agent to test removed deepcopies
+- Maybe train with crop
+- Train agent with crop
 
 >Features:
 - predict function to how the features work
@@ -14,7 +13,6 @@ Things TODO:
 Things done:
 - Simple autoencoder
 - Crop the game board to the relevant part
-- Tensorforce for DQN
 - Trained features and agent on server
 - Player.play()
 - Decaying exploration rate

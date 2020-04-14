@@ -71,8 +71,8 @@ def main():
         "-b", "--batch", type=int, default=agent_defaults["batch_size"],
         dest="batch_size", help="Training batch size")
     agent_train.add_argument(
-        "-c", "--continue", dest="cont", default=False, const=True, nargs="?",
-        metavar="STEP", help="Continue from previous checkpoint.")
+        "-c", "--continue", dest="cont", type=int,
+        metavar="STEP", help="Continue from the checkpoint of step numer..")
     agent_train.add_argument(
         "-d", "--deterministic", action="store_true",
         help="Set a constant seed to ensure repeatability")
@@ -95,9 +95,21 @@ def main():
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
 
     agent_play.add_argument(
-        "args_file", type=str, help="Json file of arguments")
+        "args_file", type=str,
+        help="Json file of arguments of a previous training")
     agent_play.add_argument(
-        "-s", "--step", type=int, help="Step number of the checkpoint to load")
+        "-c", "--continue", dest="cont", type=int, required=True,
+        metavar="STEP", help="Continue from the checkpoint of step numer..")
+    agent_play.add_argument(
+        "-w", "--watch", choices=["render", "stream", "both"],
+        default="render", help="Choose how to follow the game: "
+        "render on screen, streaming frames, both.")
+    agent_play.add_argument(
+        "--skip", type=int, metavar="N_FRAMES", help="Stream frames skipping "
+        "a random number of frames (N_FRAMES at most).")
+    agent_play.add_argument(
+        "-d", "--deterministic", action="store_true",
+        help="Set a constant seed to ensure repeatability")
 
     # Agent watch op
     agent_watch = agent_op.add_parser(
