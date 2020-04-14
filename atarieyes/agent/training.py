@@ -131,6 +131,8 @@ class CheckpointSaver(Callback):
     This class can be used as a callback or directly.
     """
 
+    save_format = "h5"
+
     def __init__(self, agent, path, interval):
         """Initialize.
 
@@ -150,7 +152,8 @@ class CheckpointSaver(Callback):
         self.episode = 0
 
         self.counters_file = os.path.join(path, "counters.json")
-        self.step_checkpoints = os.path.join(path, "weights_{step}.h5f")
+        self.step_checkpoints = os.path.join(
+            path, "weights_{step}." + self.save_format)
 
     def _update_counters(self, filepath):
         """Updates the file of counters with a new entry.
@@ -179,7 +182,8 @@ class CheckpointSaver(Callback):
 
         filepath = self.step_checkpoints.format(step=self.step)
 
-        self.agent.save_weights(filepath, overwrite=True)
+        self.agent.save_weights(
+            filepath, overwrite=True, save_format=self.save_format)
         self._update_counters(filepath)
 
     def load(self, step):

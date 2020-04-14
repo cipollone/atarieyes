@@ -1,8 +1,7 @@
 Things TODO:
 
 >Agent:
-- Deterministic training with tf.keras from checkpoint.
-	If it still learns, merge :)
+- Try some efficiency with @tf.function in keras-rl
 - Use my layers now
 - Train with crop and train new agent
 - Retrain
