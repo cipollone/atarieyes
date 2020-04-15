@@ -1,7 +1,8 @@
 Things TODO:
 
 >Agent:
-- Try some efficiency with @tf.function in keras-rl
+- Train a good agent!
+- Backup runs
 - Use my layers now
 - Train with crop and train new agent
 - Retrain
