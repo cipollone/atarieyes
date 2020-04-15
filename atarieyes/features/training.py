@@ -31,7 +31,7 @@ class Trainer:
         # Dataset
         dataset = make_dataset(
             lambda: random_play(args.env, args.render),
-            args.batch, self.frame_shape)
+            args.batch_size, self.frame_shape)
         self.dataset_it = iter(dataset)
 
         # Model
@@ -42,7 +42,7 @@ class Trainer:
 
         # Optimization
         self.params = self.model.keras.trainable_variables
-        self.optimizer = tf.optimizers.Adam(args.rate)
+        self.optimizer = tf.optimizers.Adam(args.learning_rate)
 
         # Tools
         self.saver = CheckpointSaver(self.model.keras, model_path)
@@ -243,13 +243,13 @@ class TensorBoardLogger:
                 tf.summary.image(name, image, step)
 
 
-def make_dataset(game_player, batch, frame_shape):
+def make_dataset(game_stream, batch, frame_shape):
     """Create a TF Dataset from frames of a game.
 
     Creates a TF Dataset which contains batches of frames.
 
-    :param game_player: A callable which creates an interator. The interator
-        must return Gym env.step outputs.
+    :param game_stream: A callable which creates an interator. The interator
+        must return frames of the game.
     :param batch: Batch size.
     :param frame_shape: Frame input shape.
     :return: Tensorflow Dataset.
@@ -257,9 +257,9 @@ def make_dataset(game_player, batch, frame_shape):
 
     # Extract observations
     def frame_iterate():
-        env_step = game_player()
+        env_step = game_stream()
         while True:
-            yield next(env_step)[0]
+            yield next(env_step)
 
     # Dataset
     dataset = tf.data.Dataset.from_generator(
@@ -276,7 +276,7 @@ def random_play(env_name, render=False):
 
     :param env_name: Gym Environment name
     :param render: When true, the environment is rendered.
-    :return: a interator of Gym env.step return arguments.
+    :return: an interator of frames.
     """
 
     # Make
@@ -305,7 +305,7 @@ def random_play(env_name, render=False):
             # Result
             if render:
                 env.render()
-            yield observation, reward, done, None
+            yield observation
 
         n_game += 1
 

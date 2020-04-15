@@ -65,6 +65,7 @@ class FrameAutoencoder(Model):
         self.encoder = self.Encoder(verbose=True)
         self.decoder = self.Decoder(verbose=True)
 
+        # TODO: take inspiration from Atari Agent for preprocessing
         self.preprocessing = layers.ImagePreprocessing(
             env_name=env_name, out_size=(128, 128))
         self.scale_to = layers.ScaleTo(from_range=(-1, 1), to_range=(0, 255))
