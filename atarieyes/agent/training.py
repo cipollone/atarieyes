@@ -48,7 +48,7 @@ class Trainer:
 
         # Agent
         self.kerasrl_agent = self.build_agent(
-            Namespace(args, n_actions=self.env.action_space.n))
+            Namespace(args, n_actions=self.env.action_space.n, training=True))
 
         # Tools
         self.saver = CheckpointSaver(
@@ -82,7 +82,8 @@ class Trainer:
         test_policy = EpsGreedyQPolicy(eps=0.05)
 
         # Define network for Atari games
-        atari_agent = AtariAgent(n_actions=spec.n_actions)
+        atari_agent = AtariAgent(
+            n_actions=spec.n_actions, training=spec.training)
 
         # RL agent
         dqn = DQNAgent(

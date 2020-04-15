@@ -2,6 +2,7 @@
 
 import numpy as np
 import gym
+import tensorflow as tf
 from rl.callbacks import Callback
 
 from atarieyes.tools import ArgumentSaver, Namespace, prepare_directories
@@ -60,7 +61,9 @@ class Player:
 
         # Agent
         self.kerasrl_agent = Trainer.build_agent(
-            Namespace(agent_args, n_actions=self.env.action_space.n))
+            Namespace(
+                agent_args, n_actions=self.env.action_space.n, training=False)
+        )
 
         # Load weights
         saver = CheckpointSaver(
