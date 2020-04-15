@@ -5,15 +5,13 @@ used for all environments. No ad-hoc changes.
 
 Parts of this model have been taken from the original Double Dqn paper and
 the example under `keras-rl/examples/dqn_atari.py`.
-Keras-rl mostly relies on numpy instead of tensorflow, so I won't change this.
+Keras-rl mostly relies on numpy instead of tensorflow; I won't change this.
 """
-# NOTE: I can't use atarieyes.layers here, because those use the tf.keras api.
 
 import numpy as np
 from PIL import Image
-from keras.models import Sequential
-from keras.layers import Dense, Activation, Flatten, Conv2D, Permute
-import keras.backend as K
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Activation, Flatten, Conv2D, Permute
 from rl.core import Processor
 
 from atarieyes.tools import ABCMeta2, AbstractAttribute
@@ -61,7 +59,6 @@ class AtariAgent(QAgentDef):
         input_shape = (self.window_length,) + self.frame_shape
 
         # Define
-        assert K.image_data_format() == "channels_last"
         model = Sequential([
             Permute((2, 3, 1), input_shape=input_shape),  # window -> channels
             Conv2D(32, (8, 8), strides=(4, 4)),

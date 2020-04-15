@@ -75,7 +75,8 @@ def main():
         metavar="STEP", help="Continue from the checkpoint of step numer..")
     agent_train.add_argument(
         "-d", "--deterministic", action="store_true",
-        help="Set a constant seed to ensure repeatability")
+        help="Set a constant seed to ensure repeatability. Note: this is just "
+        "for testing, as it could negatively affect initalization of weights.")
     agent_train.add_argument(
         "-m", "--memory", type=int, default=agent_defaults["memory_limit"],
         dest="memory_limit", help="Maximum size of the replay memory")

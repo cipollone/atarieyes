@@ -22,7 +22,7 @@ class Player:
         The agent is reconstructed from a json of saved arguments.
         The weights to restore are loaded from a checkpoint saved by
         Trainer. Usually something like:
-            models/agent/<env_name>/weights_<step>.h5f
+            models/agent/<env_name>/weights_<step>.<ext>
 
         :param args: namespace of arguments; see --help.
         """
@@ -56,6 +56,7 @@ class Player:
                     " environments")
             self.env.seed(30013)
             np.random.seed(30013)
+            tf.random.set_seed(30013)
 
         # Agent
         self.kerasrl_agent = Trainer.build_agent(

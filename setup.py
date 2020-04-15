@@ -7,9 +7,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    dependency_links=[
-        "git+https://github.com/cipollone/keras-rl.git@tf2-keras#egg=keras-rl"
-    ],
+    dependency_links=["git+https://github.com/cipollone/keras-rl.git@tf2#egg=keras-rl"],
     install_requires=["opencv-python", "numpy", "gym[atari]", "tensorflow==2.1"],
     name="atarieyes",
     version="0.0.4",

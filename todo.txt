@@ -1,9 +1,11 @@
 Things TODO:
 
 >Agent:
-- Train agent to test removed deepcopies
-- Maybe train with crop
-- Train agent with crop
+- Train a good agent!
+- Backup runs
+- Use my layers now
+- Train with crop and train new agent
+- Retrain
 
 >Features:
 - predict function to how the features work
