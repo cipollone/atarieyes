@@ -104,6 +104,7 @@ class Trainer:
             train_interval=spec.train_interval,
             target_model_update=spec.target_update,
             delta_clip=1.0,
+            custom_model_objects=atari_agent.custom_layers,
         )
         dqn.compile(
             optimizer=Adam(lr=spec.learning_rate),
@@ -122,7 +123,7 @@ class Trainer:
 
         # Go
         self.kerasrl_agent.fit(
-            self.env, callbacks=self.callbacks, nb_steps=2000000,
+            self.env, callbacks=self.callbacks, nb_steps=20000000,
             log_interval=10000, init_step=init_step, init_episode=init_episode)
 
         # Save final weights

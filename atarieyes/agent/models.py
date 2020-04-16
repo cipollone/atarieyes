@@ -11,12 +11,13 @@ Keras-rl mostly relies on numpy instead of tensorflow; I won't change this.
 import numpy as np
 from PIL import Image
 import gym
+from tensorflow import keras
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Activation, Flatten, Conv2D, Permute
 from rl.core import Processor
 
 from atarieyes.tools import ABCMeta2, AbstractAttribute
-from atarieyes.layers import CropToEnvBox
+from atarieyes.layers import CropToEnvBox, ConvBlock
 
 
 class QAgentDef(metaclass=ABCMeta2):
@@ -39,6 +40,12 @@ class AtariAgent(QAgentDef):
     # Common hyperparameters
     resize_shape = (84, 84)     # frames resized to this size
     window_length = 4           # an observation contains 4 consecutive frames
+
+    # Additional layers needed for restoring
+    custom_layers = dict(
+        ConvBlock=ConvBlock,
+        VarianceScaling=keras.initializers.VarianceScaling,  # probable tf bug
+    )
 
     def __init__(self, env_name, training):
         """Initialize.
@@ -64,21 +71,26 @@ class AtariAgent(QAgentDef):
         :return: a keras model
         """
 
+        #
+        variance_init = lambda: keras.initializers.VarianceScaling(2)
+
         # The input of the model is a batch of groups of frames
         input_shape = (self.window_length,) + self.resize_shape
 
         # Define
         model = Sequential([
             Permute((2, 3, 1), input_shape=input_shape),  # window -> channels
-            Conv2D(32, (8, 8), strides=(4, 4)),
-            Activation("relu"),
-            Conv2D(64, (4, 4), strides=(2, 2)),
-            Activation("relu"),
-            Conv2D(64, (3, 3), strides=(1, 1)),
-            Activation("relu"),
+            ConvBlock(
+                filters=32, kernel_size=8, strides=4, padding="valid",
+                activation="relu", kernel_initializer=variance_init()),
+            ConvBlock(
+                filters=64, kernel_size=4, strides=2, padding="valid",
+                activation="relu", kernel_initializer=variance_init()),
+            ConvBlock(
+                filters=64, kernel_size=3, strides=1, padding="valid",
+                activation="relu", kernel_initializer=variance_init()),
             Flatten(),
-            Dense(512),
-            Activation("relu"),
+            Dense(512, activation="relu", kernel_initializer=variance_init()),
             Dense(self.n_actions),
         ], name="Agent_net")
         model.summary()
