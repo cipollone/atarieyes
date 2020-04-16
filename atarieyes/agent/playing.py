@@ -61,8 +61,7 @@ class Player:
 
         # Agent
         self.kerasrl_agent = Trainer.build_agent(
-            Namespace(
-                agent_args, n_actions=self.env.action_space.n, training=False)
+            Namespace(agent_args, training=False, random_test=args.random_test)
         )
 
         # Load weights

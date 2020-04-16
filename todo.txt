@@ -2,9 +2,11 @@ TODO notes
 
 Agent:
 	Todo next:
-		- Train and play agent, then merge
+		- Apply changes from papers
+		- Retrain, merge
 	Todo later/maybe:
-		- Train from croped input
+		- Weights initializer for relu:
+			https://arxiv.org/pdf/1502.01852v1.pdf
 
 Features:
 	Todo next:

@@ -47,8 +47,7 @@ class Trainer:
             tf.random.set_seed(30013)
 
         # Agent
-        self.kerasrl_agent = self.build_agent(
-            Namespace(args, n_actions=self.env.action_space.n, training=True))
+        self.kerasrl_agent = self.build_agent(Namespace(args, training=True))
 
         # Tools
         self.saver = CheckpointSaver(
@@ -70,16 +69,20 @@ class Trainer:
         :return: the rl agent
         """
 
+        env = gym.make(spec.env)
+        n_actions = env.action_space.n
+
         # Samples are extracted from memory, not observed directly
         memory = SequentialMemory(
             limit=spec.memory_limit, window_length=AtariAgent.window_length)
 
         # Linear dicrease of greedy actions
         train_policy = LinearAnnealedPolicy(
-            EpsGreedyQPolicy(), attr="eps", value_max=1.0, value_min=0.1,
-            value_test=0.05, nb_steps=1000000
+            EpsGreedyQPolicy(), attr="eps", value_max=1.0,
+            value_min=spec.random_min, value_test=spec.random_test,
+            nb_steps=spec.random_decay_steps,
         )
-        test_policy = EpsGreedyQPolicy(eps=0.05)
+        test_policy = EpsGreedyQPolicy(eps=spec.random_test)
 
         # Define network for Atari games
         atari_agent = AtariAgent(
@@ -90,7 +93,7 @@ class Trainer:
             model=atari_agent.model,
             enable_double_dqn=True,
             enable_dueling_network=False,
-            nb_actions=spec.n_actions,
+            nb_actions=n_actions,
             policy=train_policy,
             test_policy=test_policy,
             memory=memory,
@@ -99,7 +102,7 @@ class Trainer:
             gamma=spec.gamma,
             batch_size=spec.batch_size,
             train_interval=spec.train_interval,
-            target_model_update=10000,
+            target_model_update=spec.target_update,
             delta_clip=1.0,
         )
         dqn.compile(

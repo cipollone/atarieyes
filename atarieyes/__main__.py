@@ -20,11 +20,15 @@ def main():
     agent_defaults = dict(
         memory_limit=1000000,
         learning_rate=0.00025,
-        steps_warmup=50000,
         gamma=0.99,
-        save_frequency=200000,
         batch_size=32,
         train_interval=4,
+        random_min=0.1,
+        random_test=0.03,
+        steps_warmup=20000,
+        save_frequency=50000,
+        random_decay_steps=600000,
+        target_update=10000,
     )
 
     parser = argparse.ArgumentParser(
@@ -91,6 +95,23 @@ def main():
         "--warmup", type=int, default=agent_defaults["steps_warmup"],
         dest="steps_warmup", help="Number of observations to collect "
         "before training")
+    agent_train.add_argument(
+        "--rand-decay", type=int, metavar="STEPS", dest="random_decay_steps",
+        default=agent_defaults["random_decay_steps"],
+        help="The linar decay policy chooses a random action from 100% to "
+        "--rand-min%, in this number of steps")
+    agent_train.add_argument(
+        "--rand-min", type=float, metavar="PROB", dest="random_min",
+        default=agent_defaults["random_min"],
+        help="The final (minimum) value of the probability of a random action")
+    agent_train.add_argument(
+        "--rand-test", type=float, metavar="PROB", dest="random_test",
+        default=agent_defaults["random_test"],
+        help="Probability of a random action while testing/playing")
+    agent_train.add_argument(
+        "--target-update", type=int, metavar="STEPS", dest="target_update",
+        default=agent_defaults["target_update"], help="Frequency, in steps, "
+        "at which the target model is updated (see DDQN)")
 
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
@@ -111,6 +132,10 @@ def main():
     agent_play.add_argument(
         "-d", "--deterministic", action="store_true",
         help="Set a constant seed to ensure repeatability")
+    agent_play.add_argument(
+        "--rand-test", type=float, metavar="PROB", dest="random_test",
+        default=agent_defaults["random_test"],
+        help="Probability of a random action while testing/playing")
 
     # Agent watch op
     agent_watch = agent_op.add_parser(
