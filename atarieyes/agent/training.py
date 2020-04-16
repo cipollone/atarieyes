@@ -83,7 +83,7 @@ class Trainer:
 
         # Define network for Atari games
         atari_agent = AtariAgent(
-            n_actions=spec.n_actions, training=spec.training)
+            env_name=spec.env, training=spec.training)
 
         # RL agent
         dqn = DQNAgent(

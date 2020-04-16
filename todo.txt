@@ -2,15 +2,13 @@ TODO notes
 
 Agent:
 	Todo next:
-		- Reset game on life lost
-		- Crop frames
-		- Retrain
+		- Train and play agent, then merge
 	Todo later/maybe:
 		- Train from croped input
 
 Features:
 	Todo next:
-		- Stream from trained player. Train from there.
+		- Dataset from streaming player expert
 	Todo later/maybe:
 		- predict function to how the features work
 		- Batch, instance normalization?

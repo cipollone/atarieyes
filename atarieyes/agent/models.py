@@ -10,11 +10,13 @@ Keras-rl mostly relies on numpy instead of tensorflow; I won't change this.
 
 import numpy as np
 from PIL import Image
+import gym
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Activation, Flatten, Conv2D, Permute
 from rl.core import Processor
 
 from atarieyes.tools import ABCMeta2, AbstractAttribute
+from atarieyes.layers import CropToEnvBox
 
 
 class QAgentDef(metaclass=ABCMeta2):
@@ -35,21 +37,25 @@ class AtariAgent(QAgentDef):
     """Agent definitions for Atari environments."""
 
     # Common hyperparameters
-    frame_shape = (84, 84)     # frames resized to this size
-    window_length = 4          # an observation contains 4 consecutive frames
+    resize_shape = (84, 84)     # frames resized to this size
+    window_length = 4           # an observation contains 4 consecutive frames
 
-    def __init__(self, n_actions, training):
+    def __init__(self, env_name, training):
         """Initialize.
 
-        :param n_actions: number of actions for this environment.
+        :param env_name: name of an Atari gym environment.
         :param training: boolean training flag.
         """
+        
+        # Init
+        env = gym.make(env_name)
+        self.n_actions = env.action_space.n        # discrete in Atari
 
-        self.n_actions = n_actions
-
+        # Build models
         self.model = self._build_model()
         self.processor = self.Processor(
-            frame_shape=self.frame_shape,
+            env_name=env_name,
+            resize_shape=self.resize_shape,
             one_life=True if training else False)  # for clarity
 
     def _build_model(self):
@@ -59,7 +65,7 @@ class AtariAgent(QAgentDef):
         """
 
         # The input of the model is a batch of groups of frames
-        input_shape = (self.window_length,) + self.frame_shape
+        input_shape = (self.window_length,) + self.resize_shape
 
         # Define
         model = Sequential([
@@ -85,20 +91,22 @@ class AtariAgent(QAgentDef):
         A processor can modify observations, actions, rewards, etc.
         """
 
-        def __init__(self, frame_shape, one_life=True):
+        def __init__(self, env_name, resize_shape, one_life=True):
             """Initialize.
 
-            :param frame_shape: 2d size of the resized frames.
+            :param env_name: name of an Atari gym environment.
+            :param resize_shape: 2d size of the resized frames.
             :param one_life: if True, the game is stopped when a single life
                 is lost.
             """
 
             Processor.__init__(self)
 
-            self.frame_shape = frame_shape
+            self.resize_shape = resize_shape
             self.one_life = one_life
 
             self.lives = None
+            self.cropper = CropToEnvBox(env_name)
 
         def process_step(self, observation, reward, done, info):
             """Processes an entire step.
@@ -139,11 +147,12 @@ class AtariAgent(QAgentDef):
 
             assert observation.ndim == 3
 
+            observation = self.cropper.crop_one(observation)
             img = Image.fromarray(observation)
-            img = img.resize(self.frame_shape).convert("L")
+            img = img.resize(self.resize_shape).convert("L")
             processed_observation = np.array(img, dtype=np.uint8)
 
-            assert processed_observation.shape == self.frame_shape
+            assert processed_observation.shape == self.resize_shape
             return processed_observation
 
         def process_reward(self, reward):
