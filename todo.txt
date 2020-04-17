@@ -2,6 +2,7 @@ TODO notes
 
 Agent:
 	Todo next:
+		- Update keras-rl dependencies
 		- Retrain, merge
 	Todo later/maybe:
 

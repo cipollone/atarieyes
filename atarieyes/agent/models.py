@@ -108,17 +108,18 @@ class AtariAgent(QAgentDef):
 
             :param env_name: name of an Atari gym environment.
             :param resize_shape: 2d size of the resized frames.
-            :param one_life: if True, the game is stopped when a single life
-                is lost.
+            :param one_life: if True, every time a life is lost, the state
+                is marked as terminal.
             """
 
             Processor.__init__(self)
 
-            self.resize_shape = resize_shape
-            self.one_life = one_life
+            self._one_life = one_life
+            self._lives = None
+            self._life_lost = False
 
-            self.lives = None
-            self.cropper = CropToEnvBox(env_name)
+            self._resize_shape = resize_shape
+            self._cropper = CropToEnvBox(env_name)
 
         def process_step(self, observation, reward, done, info):
             """Processes an entire step.
@@ -140,12 +141,11 @@ class AtariAgent(QAgentDef):
             reward = self.process_reward(reward)
 
             # Early termination
-            if self.one_life:
-                if not self.lives:
-                    self.lives = info["ale.lives"]
-                if info["ale.lives"] < self.lives:
-                    self.lives = None
-                    done = True
+            if self._one_life:
+                if not self._lives:
+                    self._lives = info["ale.lives"]
+                self._life_lost = (info["ale.lives"] < self._lives)
+                self._lives = info["ale.lives"]
 
             return observation, reward, done, info
 
@@ -159,12 +159,12 @@ class AtariAgent(QAgentDef):
 
             assert observation.ndim == 3
 
-            observation = self.cropper.crop_one(observation)
+            observation = self._cropper.crop_one(observation)
             img = Image.fromarray(observation)
-            img = img.resize(self.resize_shape).convert("L")
+            img = img.resize(self._resize_shape).convert("L")
             processed_observation = np.array(img, dtype=np.uint8)
 
-            assert processed_observation.shape == self.resize_shape
+            assert processed_observation.shape == self._resize_shape
             return processed_observation
 
         def process_reward(self, reward):
@@ -183,3 +183,22 @@ class AtariAgent(QAgentDef):
 
             processed_batch = batch.astype("float32") / 255.
             return processed_batch
+
+        def process_memory(self, observation, action, reward, terminal):
+            """Process data before storing them in memory.
+
+            NOTE: these arguments are already processed by the functions above.
+
+            :param observation: last env observation (altready processed
+                by process_step).
+            :param action: action choosen after observation
+            :param reward: received reward
+            :param terminal: terminal state flag
+            """
+
+            # Remember a state as terminal when a life is lost.
+            #   Unless 0 lives, because the env may send it immediately after.
+            if self._one_life and self._life_lost and self._lives > 0:
+                terminal = True
+
+            return observation, action, reward, terminal
