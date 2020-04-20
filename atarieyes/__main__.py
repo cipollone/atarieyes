@@ -19,8 +19,7 @@ def main():
     )
     agent_defaults = dict(
         memory_limit=1000000,
-        learning_rate=0.0000625,
-        #learning_rate=0.00025,
+        learning_rate=0.00025,
         gamma=0.99,
         batch_size=32,
         train_interval=4,
@@ -29,7 +28,6 @@ def main():
         steps_warmup=50000,
         save_frequency=100000,
         random_decay_steps=1000000,
-        #random_decay_steps=300000,
         target_update=10000,
     )
 

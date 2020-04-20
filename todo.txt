@@ -24,6 +24,7 @@ Notes:
 	- Be careful with the loss function for the autoencoder:
 		the internal features should be meaningful (i.e. contain fluents).
 		Also, do not train the autoencoder alone, but toghether with other losses.
-		Use sparsity constraints (regularization loss?) (maybe not necessary with binary data)
-		Prefer conv2d maxpooling and upsampling2d
-
+		Use sparsity constraints (regularization loss?) (maybe not necessary with
+		binary data) Prefer conv2d maxpooling and upsampling2d
+	- Agent training: first improvements seem to show up with
+		random < 0.5 and q > 0.7 approx.

@@ -123,7 +123,7 @@ class Trainer:
 
         # Go
         self.kerasrl_agent.fit(
-            self.env, callbacks=self.callbacks, nb_steps=20000000,
+            self.env, callbacks=self.callbacks, nb_steps=10000000,
             log_interval=10000, init_step=init_step, init_episode=init_episode)
 
         # Save final weights
