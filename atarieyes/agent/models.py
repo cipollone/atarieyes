@@ -71,9 +71,6 @@ class AtariAgent(QAgentDef):
         :return: a keras model
         """
 
-        #
-        variance_init = lambda: keras.initializers.VarianceScaling(2)
-
         # The input of the model is a batch of groups of frames
         input_shape = (self.window_length,) + self.resize_shape
 
@@ -82,15 +79,15 @@ class AtariAgent(QAgentDef):
             Permute((2, 3, 1), input_shape=input_shape),  # window -> channels
             ConvBlock(
                 filters=32, kernel_size=8, strides=4, padding="valid",
-                activation="relu", kernel_initializer=variance_init()),
+                activation="relu"),
             ConvBlock(
                 filters=64, kernel_size=4, strides=2, padding="valid",
-                activation="relu", kernel_initializer=variance_init()),
+                activation="relu"),
             ConvBlock(
                 filters=64, kernel_size=3, strides=1, padding="valid",
-                activation="relu", kernel_initializer=variance_init()),
+                activation="relu"),
             Flatten(),
-            Dense(512, activation="relu", kernel_initializer=variance_init()),
+            Dense(512, activation="relu"),
             Dense(self.n_actions),
         ], name="Agent_net")
         model.summary()
@@ -139,6 +136,7 @@ class AtariAgent(QAgentDef):
             # Standard processing
             observation = self.process_observation(observation)
             reward = self.process_reward(reward)
+            info = self.process_info(info)
 
             # Early termination
             if self._one_life:
@@ -159,7 +157,7 @@ class AtariAgent(QAgentDef):
 
             assert observation.ndim == 3
 
-            observation = self._cropper.crop_one(observation)
+            #observation = self._cropper.crop_one(observation)
             img = Image.fromarray(observation)
             img = img.resize(self._resize_shape).convert("L")
             processed_observation = np.array(img, dtype=np.uint8)
