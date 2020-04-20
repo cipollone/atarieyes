@@ -71,9 +71,6 @@ class AtariAgent(QAgentDef):
         :return: a keras model
         """
 
-        #
-        variance_init = lambda: keras.initializers.VarianceScaling(2)
-
         # The input of the model is a batch of groups of frames
         input_shape = (self.window_length,) + self.resize_shape
 
@@ -82,15 +79,15 @@ class AtariAgent(QAgentDef):
             Permute((2, 3, 1), input_shape=input_shape),  # window -> channels
             ConvBlock(
                 filters=32, kernel_size=8, strides=4, padding="valid",
-                activation="relu", kernel_initializer=variance_init()),
+                activation="relu"),
             ConvBlock(
                 filters=64, kernel_size=4, strides=2, padding="valid",
-                activation="relu", kernel_initializer=variance_init()),
+                activation="relu"),
             ConvBlock(
                 filters=64, kernel_size=3, strides=1, padding="valid",
-                activation="relu", kernel_initializer=variance_init()),
+                activation="relu"),
             Flatten(),
-            Dense(512, activation="relu", kernel_initializer=variance_init()),
+            Dense(512, activation="relu"),
             Dense(self.n_actions),
         ], name="Agent_net")
         model.summary()
@@ -121,33 +118,34 @@ class AtariAgent(QAgentDef):
             self._resize_shape = resize_shape
             self._cropper = CropToEnvBox(env_name)
 
-        def process_step(self, observation, reward, done, info):
-            """Processes an entire step.
+        #def process_step(self, observation, reward, done, info):
+        #    """Processes an entire step.
 
-            NOTE: this overrides process_step in rl.Processor. I need to
-                call other methods manually.
+        #    NOTE: this overrides process_step in rl.Processor. I need to
+        #        call other methods manually.
 
-            :param observation: An observation as obtained by the environment.
-            :param reward: A reward as obtained by the environment.
-            :param done: True if the environment is in a terminal state,
-                False otherwise.
-            :param info: The debug info dictionary as obtained by the
-                environment.
-            :return: processed (observation, reward, done, reward)
-            """
+        #    :param observation: An observation as obtained by the environment.
+        #    :param reward: A reward as obtained by the environment.
+        #    :param done: True if the environment is in a terminal state,
+        #        False otherwise.
+        #    :param info: The debug info dictionary as obtained by the
+        #        environment.
+        #    :return: processed (observation, reward, done, reward)
+        #    """
 
-            # Standard processing
-            observation = self.process_observation(observation)
-            reward = self.process_reward(reward)
+        #    # Standard processing
+        #    observation = self.process_observation(observation)
+        #    reward = self.process_reward(reward)
+        #    info = self.process_info(info)
 
-            # Early termination
-            if self._one_life:
-                if not self._lives:
-                    self._lives = info["ale.lives"]
-                self._life_lost = (info["ale.lives"] < self._lives)
-                self._lives = info["ale.lives"]
+        #    # Early termination
+        #    if self._one_life:
+        #        if not self._lives:
+        #            self._lives = info["ale.lives"]
+        #        self._life_lost = (info["ale.lives"] < self._lives)
+        #        self._lives = info["ale.lives"]
 
-            return observation, reward, done, info
+        #    return observation, reward, done, info
 
         def process_observation(self, observation):
             """Process an observation returned from the environment.
@@ -159,7 +157,7 @@ class AtariAgent(QAgentDef):
 
             assert observation.ndim == 3
 
-            observation = self._cropper.crop_one(observation)
+            #observation = self._cropper.crop_one(observation)
             img = Image.fromarray(observation)
             img = img.resize(self._resize_shape).convert("L")
             processed_observation = np.array(img, dtype=np.uint8)
@@ -184,21 +182,21 @@ class AtariAgent(QAgentDef):
             processed_batch = batch.astype("float32") / 255.
             return processed_batch
 
-        def process_memory(self, observation, action, reward, terminal):
-            """Process data before storing them in memory.
+        #def process_memory(self, observation, action, reward, terminal):
+        #    """Process data before storing them in memory.
 
-            NOTE: these arguments are already processed by the functions above.
+        #    NOTE: these arguments are already processed by the functions above.
 
-            :param observation: last env observation (altready processed
-                by process_step).
-            :param action: action choosen after observation
-            :param reward: received reward
-            :param terminal: terminal state flag
-            """
+        #    :param observation: last env observation (altready processed
+        #        by process_step).
+        #    :param action: action choosen after observation
+        #    :param reward: received reward
+        #    :param terminal: terminal state flag
+        #    """
 
-            # Remember a state as terminal when a life is lost.
-            #   Unless 0 lives, because the env may send it immediately after.
-            if self._one_life and self._life_lost and self._lives > 0:
-                terminal = True
+        #    # Remember a state as terminal when a life is lost.
+        #    #   Unless 0 lives, because the env may send it immediately after.
+        #    if self._one_life and self._life_lost and self._lives > 0:
+        #        terminal = True
 
-            return observation, action, reward, terminal
+        #    return observation, action, reward, terminal
