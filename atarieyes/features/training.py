@@ -7,6 +7,7 @@ import tensorflow as tf
 
 from atarieyes.features import models
 from atarieyes import tools
+from atarieyes.streaming import AtariFramesReceiver
 
 
 class Trainer:
@@ -30,7 +31,7 @@ class Trainer:
 
         # Dataset
         dataset = make_dataset(
-            lambda: random_play(args.env, args.render),
+            lambda: agent_player(args.env, args.stream),
             args.batch_size, self.frame_shape)
         self.dataset_it = iter(dataset)
 
@@ -243,21 +244,21 @@ class TensorBoardLogger:
                 tf.summary.image(name, image, step)
 
 
-def make_dataset(game_stream, batch, frame_shape):
+def make_dataset(game_player, batch, frame_shape):
     """Create a TF Dataset from frames of a game.
 
     Creates a TF Dataset which contains batches of frames.
 
-    :param game_stream: A callable which creates an interator. The interator
+    :param game_player: A callable which creates an interator. The interator
         must return frames of the game.
     :param batch: Batch size.
-    :param frame_shape: Frame input shape.
+    :param frame_shape: Frame shape retuned by game_player.
     :return: Tensorflow Dataset.
     """
 
     # Extract observations
     def frame_iterate():
-        env_step = game_stream()
+        env_step = game_player()
         while True:
             yield next(env_step)
 
@@ -271,7 +272,7 @@ def make_dataset(game_stream, batch, frame_shape):
     return dataset
 
 
-def random_play(env_name, render=False):
+def random_player(env_name, render=False):
     """Play randomly a game.
 
     :param env_name: Gym Environment name
@@ -311,3 +312,30 @@ def random_play(env_name, render=False):
 
     # Leave
     env.close()
+
+
+def agent_player(env_name, ip="localhost"):
+    """Returns frame from a trained agent.
+
+    This requires a running instance of `atarieyes agent play`.
+
+    :param env_name: name of an Atari Gym environment
+    :param ip: machine where the agent is playing
+    :return: a generator of frames
+    """
+
+    # NOTE: There is no synchronization between training an playing.
+    #  The receiver queue may become huge.
+
+    print("> Waiting for a stream of frames from:", ip)
+
+    # Set up a connection
+    receiver = AtariFramesReceiver(env_name, ip)
+
+    # Collect
+    try:
+        while True:
+            yield receiver.receive(wait=True)
+
+    except ConnectionAbortedError:
+        raise StopIteration

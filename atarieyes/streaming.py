@@ -249,7 +249,7 @@ class AtariFramesReceiver(Receiver):
         self.start()
 
     def receive(self, wait=False):
-        """Wait until a frame of the game is received.
+        """Return a received frame of the game.
 
         See Receiver.receive.
         """

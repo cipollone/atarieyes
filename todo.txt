@@ -7,7 +7,6 @@ Agent:
 
 Features:
 	Todo next:
-		- Dataset from streaming player expert
 	Todo later/maybe:
 		- predict function to how the features work
 		- Batch, instance normalization?
