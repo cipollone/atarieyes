@@ -78,7 +78,7 @@ class Trainer:
 
         # Linear dicrease of greedy actions
         train_policy = LinearAnnealedPolicy(
-            EpsGreedyQPolicy(), attr="eps", value_max=1.0,
+            EpsGreedyQPolicy(), attr="eps", value_max=spec.random_max,
             value_min=spec.random_min, value_test=spec.random_test,
             nb_steps=spec.random_decay_steps,
         )

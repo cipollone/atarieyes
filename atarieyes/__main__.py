@@ -23,10 +23,11 @@ def main():
         gamma=0.99,
         batch_size=32,
         train_interval=4,
+        random_max=1.0,
         random_min=0.1,
         random_test=0.03,
         steps_warmup=50000,
-        save_frequency=100000,
+        save_frequency=200000,
         random_decay_steps=1000000,
         target_update=10000,
     )
@@ -98,8 +99,12 @@ def main():
     agent_train.add_argument(
         "--rand-decay", type=int, metavar="STEPS", dest="random_decay_steps",
         default=agent_defaults["random_decay_steps"],
-        help="The linar decay policy chooses a random action from 100% to "
-        "--rand-min%, in this number of steps")
+        help="The linar decay policy chooses a random action from rand-max% "
+        "to rand-min%, in this number of steps")
+    agent_train.add_argument(
+        "--rand-max", type=float, metavar="PROB", dest="random_max",
+        default=agent_defaults["random_max"], help="The initial (maximum) "
+        "value of the probability of a random action")
     agent_train.add_argument(
         "--rand-min", type=float, metavar="PROB", dest="random_min",
         default=agent_defaults["random_min"],
