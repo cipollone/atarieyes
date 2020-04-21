@@ -1,8 +1,12 @@
 """Play with a trained agent."""
 
+import numpy as np
 import gym
+import tensorflow as tf
+from rl.callbacks import Callback
 
 from atarieyes.tools import ArgumentSaver, Namespace, prepare_directories
+from atarieyes.streaming import AtariFramesSender
 from atarieyes.agent.training import Trainer, CheckpointSaver
 
 
@@ -17,12 +21,16 @@ class Player:
         """Initialize.
 
         The agent is reconstructed from a json of saved arguments.
-        If args_file is: "logs/agent/BreakoutDeterministic-v4/0/args.json",
-        the weights are loaded from a checkpoint in
-        "models/agent/BreakoutDeterministic-v4/".
+        The weights to restore are loaded from a checkpoint saved by
+        Trainer. Usually something like:
+            models/agent/<env_name>/weights_<step>.<ext>
 
         :param args: namespace of arguments; see --help.
         """
+
+        # Store
+        self.rendering = args.watch in ("render", "both")
+        self.streaming = args.watch in ("stream", "both")
 
         # Load the arguments
         agent_args = ArgumentSaver.load(args.args_file)
@@ -41,20 +49,76 @@ class Player:
         self.env = gym.make(agent_args.env)
         self.env_name = agent_args.env
 
+        # Repeatability
+        if args.deterministic:
+            if "Deterministic" not in self.env_name:
+                raise ValueError(
+                    "--deterministic only works with deterministic"
+                    " environments")
+            self.env.seed(30013)
+            np.random.seed(30013)
+            tf.random.set_seed(30013)
+
         # Agent
         self.kerasrl_agent = Trainer.build_agent(
-            Namespace(agent_args, n_actions=self.env.action_space.n))
+            Namespace(agent_args, training=False, random_test=args.random_test)
+        )
 
         # Load weights
         saver = CheckpointSaver(
             agent=self.kerasrl_agent, path=model_path,
-            interval=agent_args.saves
+            interval=agent_args.saves,
         )
-        saver.load(args.step)
+        saver.load(args.cont)
+
+        # Callbacks
+        self.callbacks = []
+        if self.streaming:
+            self.callbacks.append(
+                Streamer(self.env_name, skip_frames=args.skip))
 
     def play(self):
         """Play."""
 
         # Go
         self.kerasrl_agent.test(
-            self.env, nb_episodes=1000, visualize=True)
+            self.env, nb_episodes=1000, visualize=self.rendering,
+            callbacks=self.callbacks,
+        )
+
+
+class Streamer(Callback):
+    """Send frames through a connection."""
+
+    def __init__(self, env_name, skip_frames=None):
+        """Initialize.
+
+        :param env_name: name of an Atari environment.
+        :param skip_frames: skip a random number of frames in [0, skip_frames].
+        """
+
+        # Super
+        Callback.__init__(self)
+
+        # Check
+        if skip_frames is not None and skip_frames <= 0:
+            raise ValueError("skip_frames must be positive")
+
+        # Init
+        self.sender = AtariFramesSender(env_name)
+        self.skip_frames = skip_frames
+        self._skips_left = 0
+
+    def on_step_end(self, step, logs={}):
+        """Send each frame."""
+
+        # Collect a frame
+        if not self.skip_frames or self._skips_left == 0:
+            frame = logs["raw_observation"]
+            self.sender.send(frame)
+
+        # Update
+        if self.skip_frames:
+            self._skips_left -= 1
+            if self._skips_left <= 0:
+                self._skips_left = np.random.randint(0, self.skip_frames+1)

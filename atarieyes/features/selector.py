@@ -30,6 +30,7 @@ def selection_tool(args):
     # Prepare
     f = 4
     image0 = cv.resize(image0, (f*w, f*h))
+    image0 = np.flip(image0, 2)  # opencv uses BGR
     selections = []
 
     # Select outer box

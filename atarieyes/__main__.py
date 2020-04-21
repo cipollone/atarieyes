@@ -20,11 +20,16 @@ def main():
     agent_defaults = dict(
         memory_limit=1000000,
         learning_rate=0.00025,
-        steps_warmup=50000,
         gamma=0.99,
-        save_frequency=200000,
         batch_size=32,
         train_interval=4,
+        random_max=1.0,
+        random_min=0.1,
+        random_test=0.03,
+        steps_warmup=50000,
+        save_frequency=200000,
+        random_decay_steps=1000000,
+        target_update=10000,
     )
 
     parser = argparse.ArgumentParser(
@@ -71,11 +76,12 @@ def main():
         "-b", "--batch", type=int, default=agent_defaults["batch_size"],
         dest="batch_size", help="Training batch size")
     agent_train.add_argument(
-        "-c", "--continue", dest="cont", default=False, const=True, nargs="?",
-        metavar="STEP", help="Continue from previous checkpoint.")
+        "-c", "--continue", dest="cont", type=int,
+        metavar="STEP", help="Continue from the checkpoint of step numer..")
     agent_train.add_argument(
         "-d", "--deterministic", action="store_true",
-        help="Set a constant seed to ensure repeatability")
+        help="Set a constant seed to ensure repeatability. Note: this is just "
+        "for testing, as it could negatively affect initalization of weights.")
     agent_train.add_argument(
         "-m", "--memory", type=int, default=agent_defaults["memory_limit"],
         dest="memory_limit", help="Maximum size of the replay memory")
@@ -90,14 +96,51 @@ def main():
         "--warmup", type=int, default=agent_defaults["steps_warmup"],
         dest="steps_warmup", help="Number of observations to collect "
         "before training")
+    agent_train.add_argument(
+        "--rand-decay", type=int, metavar="STEPS", dest="random_decay_steps",
+        default=agent_defaults["random_decay_steps"],
+        help="The linar decay policy chooses a random action from rand-max% "
+        "to rand-min%, in this number of steps")
+    agent_train.add_argument(
+        "--rand-max", type=float, metavar="PROB", dest="random_max",
+        default=agent_defaults["random_max"], help="The initial (maximum) "
+        "value of the probability of a random action")
+    agent_train.add_argument(
+        "--rand-min", type=float, metavar="PROB", dest="random_min",
+        default=agent_defaults["random_min"],
+        help="The final (minimum) value of the probability of a random action")
+    agent_train.add_argument(
+        "--rand-test", type=float, metavar="PROB", dest="random_test",
+        default=agent_defaults["random_test"],
+        help="Probability of a random action while testing/playing")
+    agent_train.add_argument(
+        "--target-update", type=int, metavar="STEPS", dest="target_update",
+        default=agent_defaults["target_update"], help="Frequency, in steps, "
+        "at which the target model is updated (see DDQN)")
 
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
 
     agent_play.add_argument(
-        "args_file", type=str, help="Json file of arguments")
+        "args_file", type=str,
+        help="Json file of arguments of a previous training")
     agent_play.add_argument(
-        "-s", "--step", type=int, help="Step number of the checkpoint to load")
+        "-c", "--continue", dest="cont", type=int, required=True,
+        metavar="STEP", help="Continue from the checkpoint of step numer..")
+    agent_play.add_argument(
+        "-w", "--watch", choices=["render", "stream", "both"],
+        default="render", help="Choose how to follow the game: "
+        "render on screen, streaming frames, both.")
+    agent_play.add_argument(
+        "--skip", type=int, metavar="N_FRAMES", help="Stream frames skipping "
+        "a random number of frames (N_FRAMES at most).")
+    agent_play.add_argument(
+        "-d", "--deterministic", action="store_true",
+        help="Set a constant seed to ensure repeatability")
+    agent_play.add_argument(
+        "--rand-test", type=float, metavar="PROB", dest="random_test",
+        default=agent_defaults["random_test"],
+        help="Probability of a random action while testing/playing")
 
     # Agent watch op
     agent_watch = agent_op.add_parser(

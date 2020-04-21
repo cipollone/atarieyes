@@ -1,31 +1,29 @@
-Things TODO:
+TODO notes
 
->Agent:
-- Resuming from wrong step. Also policy does not resumes correctly.
-- Fix keras-rl graph saving
-- Tensorboard logs
-- Render or streaming?
+Agent:
+	Todo next:
+	Todo later/maybe:
+		- Continue training for another 1000000 frames
 
->Features:
-- predict function to how the features work
-- Batch, instance normalization?
-- improve initizazion
+Features:
+	Todo next:
+		- Dataset from streaming player expert
+	Todo later/maybe:
+		- predict function to how the features work
+		- Batch, instance normalization?
 
-Things done:
-- Simple autoencoder
-- Crop the game board to the relevant part
-- Tensorforce for DQN
-- Trained features and agent on server
-- Player.play()
-- Decaying exploration rate
-- collect training samples during reinforcement learning
+Done:
+	- Simple autoencoder
+	- Atari Breakout Player
+	- Collected frames from trained player or during training
 
 Notes:
-- In breakout, rewards are given at each brocken brick 
-- Normalization and initialization are important for deep nets!
-- Be careful with the loss function for the autoencoder:
-	the internal features should be meaningful (i.e. contain fluents).
-	Also, do not train the autoencoder alone, but toghether with other losses.
-	Use sparsity constraints (regularization loss?) (maybe not necessary with binary data)
-	Prefer conv2d maxpooling and upsampling2d
-
+	- In breakout, rewards are given at each brocken brick 
+	- Normalization and initialization are important for deep nets!
+	- Be careful with the loss function for the autoencoder:
+		the internal features should be meaningful (i.e. contain fluents).
+		Also, do not train the autoencoder alone, but toghether with other losses.
+		Use sparsity constraints (regularization loss?) (maybe not necessary with
+		binary data) Prefer conv2d maxpooling and upsampling2d
+	- Agent training: first improvements seem to show up with
+		random < 0.5 and q > 0.7 approx.

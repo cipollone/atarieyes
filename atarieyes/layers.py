@@ -296,7 +296,7 @@ class CropToEnvBox(BaseLayer):
         if not box:
             raise ValueError(
                 "No box defined for " + str(env_name) + ". "
-                "Run:\n  atarieyes select -e " + str(env_name))
+                "Run:\n  atarieyes features select -e " + str(env_name))
 
         # Set
         self._box_slice_w = slice(box[0], box[2])
@@ -314,6 +314,11 @@ class CropToEnvBox(BaseLayer):
         """Crop a batch of frames."""
 
         return inputs[:, self._box_slice_h, self._box_slice_w, :]
+
+    def crop_one(self, frame):
+        """Crop a single frame."""
+
+        return frame[self._box_slice_h, self._box_slice_w, :]
 
 
 class ImagePreprocessing(BaseLayer):
