@@ -34,10 +34,14 @@ class Sender:
     program terminates with a Ctrl-C, as often happens in long trainings.
     """
 
-    def __init__(self, msg_length):
+    QUEUE_SIZE = 20
+
+    def __init__(self, msg_length, wait=False):
         """Initialize.
 
         :param msg_length: the fixed length of messages (bytes)
+        :param wait: if False, a send() returns immediately; if True,
+            send() waits if there are too many messages still to be sent.
         """
 
         self.MSG_LENGTH = msg_length
@@ -47,7 +51,7 @@ class Sender:
             ("0.0.0.0", app_port), Sender.RequestHandler)
 
         # Data to send
-        self._data_queue = queue.Queue()
+        self._data_queue = queue.Queue(self.QUEUE_SIZE if wait else 0)
         self.server._data_queue = self._data_queue
 
     def start(self):
@@ -82,7 +86,7 @@ class Sender:
             return False
 
         # Send
-        self._data_queue.put_nowait(data)
+        self._data_queue.put(data, block=True)
         return True
 
     class OneRequestTCPServer(TCPServer):
@@ -123,11 +127,16 @@ class Sender:
 class Receiver:
     """Generic receiver class."""
 
-    def __init__(self, msg_length, ip):
+    QUEUE_SIZE = 20
+
+    def __init__(self, msg_length, ip, wait=False):
         """Initialize.
 
         :param msg_length: the fixed length of messages (bytes)
         :param ip: ip address of the sender
+        :param wait: if True, if receive() is not called often enough,
+            it no longer accepts new messages. This is only useful with a
+            Sender that also waits.
         """
 
         self.MSG_LENGTH = msg_length
@@ -137,7 +146,7 @@ class Receiver:
         self.sock.connect((ip, app_port))
 
         # Received data
-        self._data_queue = queue.Queue()
+        self._data_queue = queue.Queue(self.QUEUE_SIZE if wait else 0)
 
     def start(self):
         """Start receiving messages to a queue."""
@@ -161,7 +170,7 @@ class Receiver:
                 chunk = self.sock.recv(min(remaining_bytes, 2048))
                 if chunk == b"":
                     print("Closed", file=sys.stderr)
-                    self._data_queue.put_nowait(None)  # Signal EOT
+                    self._data_queue.put(None, block=True)  # Signal EOT
                     return
                 chunks.append(chunk)
 
@@ -169,7 +178,7 @@ class Receiver:
 
             # Return
             msg = b"".join(chunks)
-            self._data_queue.put_nowait(msg)
+            self._data_queue.put(msg, block=True)
 
     def receive(self, wait=False):
         """Return a message received.
@@ -208,7 +217,7 @@ class AtariFramesSender(Sender):
         size = len(frame.tobytes())
 
         # Super
-        Sender.__init__(self, size)
+        Sender.__init__(self, size, wait=True)
 
         # Start
         self.start()
@@ -243,7 +252,7 @@ class AtariFramesReceiver(Receiver):
         self.frame_shape = frame.shape
 
         # Super
-        Receiver.__init__(self, size, ip)
+        Receiver.__init__(self, size, ip, wait=True)
 
         # Start
         self.start()

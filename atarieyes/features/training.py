@@ -324,9 +324,6 @@ def agent_player(env_name, ip="localhost"):
     :return: a generator of frames
     """
 
-    # NOTE: There is no synchronization between training an playing.
-    #  The receiver queue may become huge.
-
     print("> Waiting for a stream of frames from:", ip)
 
     # Set up a connection
