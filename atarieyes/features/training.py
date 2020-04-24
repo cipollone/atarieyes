@@ -7,6 +7,7 @@ import tensorflow as tf
 
 from atarieyes.features import models
 from atarieyes import tools
+from atarieyes.streaming import AtariFramesReceiver
 
 
 class Trainer:
@@ -30,8 +31,8 @@ class Trainer:
 
         # Dataset
         dataset = make_dataset(
-            lambda: random_play(args.env, args.render),
-            args.batch, self.frame_shape)
+            lambda: agent_player(args.env, args.stream),
+            args.batch_size, self.frame_shape)
         self.dataset_it = iter(dataset)
 
         # Model
@@ -42,7 +43,7 @@ class Trainer:
 
         # Optimization
         self.params = self.model.keras.trainable_variables
-        self.optimizer = tf.optimizers.Adam(args.rate)
+        self.optimizer = tf.optimizers.Adam(args.learning_rate)
 
         # Tools
         self.saver = CheckpointSaver(self.model.keras, model_path)
@@ -249,9 +250,9 @@ def make_dataset(game_player, batch, frame_shape):
     Creates a TF Dataset which contains batches of frames.
 
     :param game_player: A callable which creates an interator. The interator
-        must return Gym env.step outputs.
+        must return frames of the game.
     :param batch: Batch size.
-    :param frame_shape: Frame input shape.
+    :param frame_shape: Frame shape retuned by game_player.
     :return: Tensorflow Dataset.
     """
 
@@ -259,7 +260,7 @@ def make_dataset(game_player, batch, frame_shape):
     def frame_iterate():
         env_step = game_player()
         while True:
-            yield next(env_step)[0]
+            yield next(env_step)
 
     # Dataset
     dataset = tf.data.Dataset.from_generator(
@@ -271,12 +272,12 @@ def make_dataset(game_player, batch, frame_shape):
     return dataset
 
 
-def random_play(env_name, render=False):
+def random_player(env_name, render=False):
     """Play randomly a game.
 
     :param env_name: Gym Environment name
     :param render: When true, the environment is rendered.
-    :return: a interator of Gym env.step return arguments.
+    :return: an interator of frames.
     """
 
     # Make
@@ -305,9 +306,33 @@ def random_play(env_name, render=False):
             # Result
             if render:
                 env.render()
-            yield observation, reward, done, None
+            yield observation
 
         n_game += 1
 
     # Leave
     env.close()
+
+
+def agent_player(env_name, ip="localhost"):
+    """Returns frame from a trained agent.
+
+    This requires a running instance of `atarieyes agent play`.
+
+    :param env_name: name of an Atari Gym environment
+    :param ip: machine where the agent is playing
+    :return: a generator of frames
+    """
+
+    print("> Waiting for a stream of frames from:", ip)
+
+    # Set up a connection
+    receiver = AtariFramesReceiver(env_name, ip)
+
+    # Collect
+    try:
+        while True:
+            yield receiver.receive(wait=True)
+
+    except ConnectionAbortedError:
+        raise StopIteration

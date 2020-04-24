@@ -148,8 +148,8 @@ def main():
 
     agent_watch.add_argument(
         "--stream", type=str, required=True,
-        help="Ip address of the remote trainer. "
-        "That machine must be started with the --stream option.")
+        help="Ip address of a stream of frames. "
+        "That machine could be stated with `--watch stream` option.")
     agent_watch.add_argument(
         "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of the Gym environmen the agent is being trained on.")
@@ -180,6 +180,10 @@ def main():
     features_train.add_argument(
         "-r", "--rate", type=float, default=features_defaults["learning_rate"],
         dest="learning_rate", help="Learning rate")
+    features_train.add_argument(
+        "--stream", type=str, default="localhost",
+        help="Ip address of a stream of frames. "
+        "That machine could be stated with `--watch stream` option.")
 
     # Feature selection op
     feature_select = features_op.add_parser(

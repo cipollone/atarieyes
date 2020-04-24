@@ -66,9 +66,10 @@ class FrameAutoencoder(Model):
         self.decoder = self.Decoder(verbose=True)
 
         self.preprocessing = layers.ImagePreprocessing(
-            env_name=env_name, out_size=(128, 128))
+            env_name=env_name, out_size=(80, 80), grayscale=True,
+            resize_method="nearest")
         self.scale_to = layers.ScaleTo(from_range=(-1, 1), to_range=(0, 255))
-        self.loss = layers.LossMSE()
+        self.loss = layers.LossMAE()
 
         # Keras model
         inputs = tf.keras.Input(shape=frame_shape, dtype=tf.uint8)
@@ -121,14 +122,14 @@ class FrameAutoencoder(Model):
             self.layers_stack = [
 
                 layers.ConvBlock(
-                    filters=32, kernel_size=8, strides=4, padding="reflect",
-                    activation="selu"),
+                    filters=32, kernel_size=4, strides=2, padding="reflect",
+                    activation="relu"),
                 layers.ConvBlock(
-                    filters=32, kernel_size=4, strides=2, padding="same",
-                    activation="selu"),
+                    filters=32, kernel_size=4, strides=2, padding="reflect",
+                    activation="relu"),
                 layers.ConvBlock(
-                    filters=32, kernel_size=4, strides=2, padding="same",
-                    activation="selu"),
+                    filters=16, kernel_size=4, strides=2, padding="reflect",
+                    activation="relu"),
             ]
 
             # Super
@@ -143,12 +144,12 @@ class FrameAutoencoder(Model):
 
                 layers.ConvBlock(
                     filters=32, kernel_size=4, strides=2, padding="same",
-                    activation="selu", transpose=True),
+                    activation="relu", transpose=True),
                 layers.ConvBlock(
                     filters=32, kernel_size=4, strides=2, padding="same",
-                    activation="selu", transpose=True),
+                    activation="relu", transpose=True),
                 layers.ConvBlock(
-                    filters=3, kernel_size=8, strides=4, padding="same",
+                    filters=1, kernel_size=4, strides=2, padding="same",
                     activation="tanh", transpose=True),
             ]
 

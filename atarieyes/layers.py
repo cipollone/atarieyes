@@ -324,11 +324,14 @@ class CropToEnvBox(BaseLayer):
 class ImagePreprocessing(BaseLayer):
     """Image preprocessing layer."""
 
-    def __init__(self, env_name, out_size, **kwargs):
+    def __init__(self, env_name, out_size, grayscale=False,
+            resize_method="bilinear", **kwargs):
         """Initialize.
 
         :param env_name: a gym environment name.
         :param out_size: output frame size 2 ints.
+        :param grayscale: transform to grayscale.
+        :param resize_method: TF resize method
         """
 
         # Super
@@ -337,6 +340,9 @@ class ImagePreprocessing(BaseLayer):
         # Store
         self.layer_options = {
             "out_size": out_size,
+            "env_name": env_name,
+            "grayscale": grayscale,
+            "resize_method": resize_method,
         }
 
         self.crop = CropToEnvBox(env_name)
@@ -347,6 +353,10 @@ class ImagePreprocessing(BaseLayer):
         # Crop
         inputs = self.crop(inputs)
 
+        # Gray?
+        if self.layer_options["grayscale"]:
+            inputs = tf.image.rgb_to_grayscale(inputs)
+
         # Cast from uint image
         inputs = tf.cast(inputs, tf.float32)
 
@@ -354,7 +364,8 @@ class ImagePreprocessing(BaseLayer):
         inputs = scale_to(inputs, from_range=(0, 255), to_range=(-1, 1))
 
         # Square shape is easier to handle
-        inputs = tf.image.resize(inputs, size=self.layer_options["out_size"])
+        inputs = tf.image.resize(inputs, size=self.layer_options["out_size"],
+            method=self.layer_options["resize_method"])
 
         return inputs
 
