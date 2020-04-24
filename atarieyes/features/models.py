@@ -16,10 +16,16 @@ class Model(ABC2):
     not required if we just need to make predictions, not train the model.
 
     The `keras` attribute is a keras model.
+    Some models require a non-standard training step. These can manually
+    compute the gradient to be applied, inside the compute_all function.
+    The `computed_gradient` attribute indicates this behaviour.
     """
 
     # This is the keras model
     keras = AbstractAttribute()
+
+    # Custom training? bool
+    computed_gradient = AbstractAttribute()
 
     @abstractmethod
     def predict(self, inputs):
@@ -27,12 +33,14 @@ class Model(ABC2):
 
     @abstractmethod
     def compute_all(self, inputs):
-        """Compute all outputs, loss, and metrics.
+        """Compute all outputs, loss, metrics (and gradient optionally).
 
         :param inputs: one batch.
-        :return: a dict of {"outputs": out, "loss": loss, "metrics": metrics}.
+        :return: a dict of {"outputs": out, "loss": loss,
+            "metrics": metrics, "gradients": grad}
             Where out is a sequence of output tensors, loss is the training
-            loss, metrics is a dictionary of metrics.
+            loss, metrics is a dictionary of metrics, grad is an optional
+            list of computed gradients.
         """
 
     @staticmethod
@@ -82,6 +90,7 @@ class FrameAutoencoder(Model):
 
         # Store
         self.keras = model
+        self.computed_gradient = False
 
     @tf.function
     def predict(self, inputs):
@@ -105,7 +114,8 @@ class FrameAutoencoder(Model):
         decoded = tf.cast(decoded, tf.uint8)
 
         # Ret
-        ret = {"outputs": (encoded, decoded), "loss": loss, "metrics": {}}
+        ret = dict(
+            outputs=(encoded, decoded), loss=loss, metrics={}, gradients=None)
         return ret
 
     @staticmethod

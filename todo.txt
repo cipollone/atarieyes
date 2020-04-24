@@ -8,7 +8,7 @@ Agent:
 
 Features:
 	Todo next:
-		- RBM
+		- Binary RBM model definition
 		- Preprocessing from feature
 	Todo later/maybe:
 

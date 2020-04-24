@@ -88,12 +88,18 @@ class Trainer:
         :return: outputs of the model.
         """
 
-        # Forward
-        with tf.GradientTape() as tape:
-            outputs = self.model.compute_all(next(self.dataset_it))
+        # Custom gradient
+        if self.model.computed_gradient:
+            gradients = self.model.compute_all(
+                next(self.dataset_it))["gradients"]
 
-        # Compute and apply grandient
-        gradients = tape.gradient(outputs["loss"], self.params)
+        # Compute
+        else:
+            with tf.GradientTape() as tape:
+                outputs = self.model.compute_all(next(self.dataset_it))
+            gradients = tape.gradient(outputs["loss"], self.params)
+
+        # Apply
         self.optimizer.apply_gradients(zip(gradients, self.params))
 
         return outputs
