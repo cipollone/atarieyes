@@ -36,9 +36,8 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.FrameAutoencoder(
-            frame_shape=self.frame_shape,
-            env_name=self.env.spec.id
+        self.model = models.BinaryRBM(
+            n_visible=10, n_hidden=10,   # TODO: real params
         )
 
         # Optimization

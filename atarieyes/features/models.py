@@ -165,3 +165,116 @@ class FrameAutoencoder(Model):
 
             # Super
             BaseLayer.build(self, input_shape)
+
+
+# TODO: What is the binary input type?
+class BinaryRBM(Model):
+    """Model of a Restricted Boltzmann Machine.
+
+    This model assumes binary hidden and observed units.
+    """
+
+    def __init__(self, n_visible, n_hidden):
+        """Initialize.
+
+        :param n_visible: number of visible units.
+        :param n_hidden: number of hidden units.
+        """
+
+        # Store
+        self.n_visible = n_visible
+        self.n_hidden = n_hidden
+        self.keras = None  # TODO
+        self.computed_gradient = True
+
+    def compute_all(self, inputs):
+        # TODO
+        return None
+
+    def predict(self, inputs):
+        """Make a prediction with the model.
+
+        An RBM has no real output. I define a prediction as the expected value
+        of the hidden layer.
+
+        :param inputs: one batch
+        :return output: the expected value of the hidden layer
+        """
+        # TODO
+
+    @staticmethod
+    def output_images(outputs):
+        """Get images from outputs."""
+
+        # TODO: there is something to visualize, actually
+        return {}
+
+    class BernoulliPair(BaseLayer):
+        """A pair of layers composed of binary units."""
+
+        def __init__(self, *, n_visible, n_hidden):
+            """Initialize.
+
+            :param n_visible: number of visible units.
+            :param n_hidden: number of hidden units.
+            """
+
+            # Super
+            BaseLayer.__init__(self)
+
+            # Save options
+            self.layer_options = dict(
+                n_visible=n_visible, n_hidden=n_hidden)
+
+            # Define parameters
+            self.W = self.add_weight(
+                name="W", shape=(n_visible, n_hidden),
+                dtype=tf.float32, trainable=True)
+            self.bv = self.add_weight(
+                name="bv", shape=(n_visible, 1),
+                dtype=tf.float32, trainable=True)
+            self.bh = self.add_weight(
+                name="bh", shape=(n_hidden, 1),
+                dtype=tf.float32, trainable=True)
+
+        def expected_h(self, v):
+            """Expected hidden vector (a probability).
+
+            :param v: observed visible vector
+            :return: the expected value of the hidden layer given the
+                observation.
+            """
+
+            mean_h = tf.math.sigmoid(
+                tf.linalg.matmul(self.W, v, transpose_a=True) + self.bh)
+            return mean_h
+
+        def expected_v(self, h):
+            """Expected visible vector (a probability).
+
+            :param h: "observed" hidden vector
+            :return: the expected value of the visible layer given the
+                observation.
+            """
+
+            mean_v = tf.math.sigmoid(
+                tf.linalg.matmul(self.W, h) + self.bv)
+            return mean_v
+
+        def sample_h(self, v):
+            """Sample hidden vector given visible."""
+            # TODO
+
+        def sample_v(self, h):
+            """Sample visible vector given hidden."""
+            # TODO
+
+        def call(self, inputs):
+            """I define a forward pass as computing h."""
+
+            return self.expected_h(inputs)
+
+
+class PatchRBM(BinaryRBM):
+    # TODO
+    pass
