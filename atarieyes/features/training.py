@@ -42,7 +42,8 @@ class Trainer:
         )
 
         # Optimization
-        self.params = self.model.keras.trainable_variables
+        self.params = self.model.keras.trainable_variables \
+            if not self.model.computed_gradient else None
         self.optimizer = tf.optimizers.Adam(args.learning_rate)
 
         # Tools
