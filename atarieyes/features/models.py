@@ -188,14 +188,38 @@ class BinaryRBM(Model):
         self.layers = self.BernoulliPair(
             n_visible=n_visible, n_hidden=n_hidden)
 
+        # Keras model
+        inputs = tf.keras.Input(shape=[n_visible], dtype=tf.float32)
+        ret = self.compute_all(inputs)  # TODO: python_function when tf.function
+        outputs = (*ret["outputs"], ret["gradients"])  # TODO: maybe loss
+
+        model = tf.keras.Model(
+            inputs=inputs, outputs=outputs, name="BinaryRBM")
+
         # Save
-        self.keras = None  # TODO
+        self.keras = model
         self.computed_gradient = True
 
+    # TODO: tf.function
     def compute_all(self, inputs):
-        # TODO
-        return None
+        """Compute all tensors."""
 
+        # Forward
+        inputs = tf.cast(inputs, tf.float32)
+        output = self.layers(inputs)
+
+        # Gradient
+        gradients = self._compute_gradient(inputs)
+
+        # Ret
+        ret = dict(
+            outputs=(output,), loss=None, metrics={}, gradients=gradients)
+        return ret
+
+        # TODO: ensure model.trainable_variables is layers.trainable_variables
+        # TODO: I could use the energy function as loss
+
+    # TODO: tf.function
     def predict(self, inputs):
         """Make a prediction with the model.
 
@@ -205,7 +229,12 @@ class BinaryRBM(Model):
         :param inputs: one batch
         :return output: the expected value of the hidden layer
         """
-        # TODO
+
+        # Forward
+        inputs = tf.cast(inputs, tf.float32)
+        output = self.layers(inputs)
+
+        return output
 
     @staticmethod
     def output_images(outputs):
@@ -230,7 +259,8 @@ class BinaryRBM(Model):
         expected_h2 = self.layers.expected_h(sampled_v)
 
         # CD-1 approximation
-        W_gradients_batch = (tf.einsum("bi,bj->bij", v, expected_h) -
+        W_gradients_batch = (
+            tf.einsum("bi,bj->bij", v, expected_h) -
             tf.einsum("bi,bj->bij", sampled_v, expected_h2))
         bv_gradients_batch = (v - sampled_v)
         bh_gradients_batch = (expected_h - expected_h2)
@@ -243,13 +273,13 @@ class BinaryRBM(Model):
 
         # Return gradients with the correct association
         variables = [var.name for var in self.layers.trainable_variables]
-        variables = [(name[:name.find(":")] if ":" in name else name)
+        variables = [
+            (name[:name.find(":")] if ":" in name else name)
             for name in variables]
         assert len(variables) == 3, "Expected: W, bv, bh"
         gradients_vector = [gradients[var] for var in variables]
 
         return gradients_vector
-
 
     class BernoulliPair(BaseLayer):
         """A pair of layers composed of binary units.
@@ -258,11 +288,12 @@ class BinaryRBM(Model):
         units.
         """
 
-        def __init__(self, *, n_visible, n_hidden):
+        def __init__(self, *, n_visible, n_hidden, batch_size=1):
             """Initialize.
 
             :param n_visible: number of visible units.
             :param n_hidden: number of hidden units.
+            :param batch_size: fixed size of the batch.
             """
 
             # Super
@@ -270,7 +301,12 @@ class BinaryRBM(Model):
 
             # Save options
             self.layer_options = dict(
-                n_visible=n_visible, n_hidden=n_hidden)
+                n_visible=n_visible, n_hidden=n_hidden, batch_size=batch_size)
+
+            # Constants
+            self._batch_size = batch_size
+            self._n_visible = n_visible
+            self._n_hidden = n_hidden
 
             # Define parameters
             self._W = self.add_weight(
@@ -321,13 +357,13 @@ class BinaryRBM(Model):
             :return: batch of sampled hidden units.
             """
 
-            output_shape = (v.shape[0], self._bh.shape[0])
+            output_shape = (self._batch_size, self._n_hidden)
 
             mean_h = self.expected_h(v) if expected_h is None else expected_h
             uniform_samples = tf.random.uniform(output_shape, 0, 1)
-            binary_samples = tf.where(uniform_samples < mean_h, 1, 0)
+            binary_samples = tf.where(uniform_samples < mean_h, 1.0, 0.0)
 
-            return tf.cast(binary_samples, tf.float32)
+            return binary_samples
 
         def sample_v(self, h, expected_v=None):
             """Sample visible vector given hidden.
@@ -338,23 +374,24 @@ class BinaryRBM(Model):
             :return: batch of sampled visible units.
             """
 
-            output_shape = (h.shape[0], self._bv.shape[0])
+            output_shape = (self._batch_size, self._n_visible)
 
             mean_v = self.expected_v(h) if expected_v is None else expected_v
             uniform_samples = tf.random.uniform(output_shape, 0, 1)
-            binary_samples = tf.where(uniform_samples < mean_v, 1, 0)
+            binary_samples = tf.where(uniform_samples < mean_v, 1.0, 0.0)
 
-            return tf.cast(binary_samples, tf.float32)
+            return binary_samples
 
         def call(self, inputs):
             """I define a forward pass as computing the expected h.
-            
+
             See expected_h().
             """
 
             return self.expected_h(inputs)
 
 
-class PatchRBM(BinaryRBM):
+class LocalFeature(Model):
     # TODO
-    pass
+
+    
