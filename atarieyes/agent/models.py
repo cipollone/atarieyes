@@ -17,7 +17,7 @@ from tensorflow.keras.layers import Dense, Flatten, Permute
 from rl.core import Processor
 
 from atarieyes.tools import ABCMeta2, AbstractAttribute
-from atarieyes.layers import CropToEnvBox, ConvBlock
+from atarieyes.layers import CropToEnv, ConvBlock
 
 
 class QAgentDef(metaclass=ABCMeta2):
@@ -116,7 +116,7 @@ class AtariAgent(QAgentDef):
             self._life_lost = False
 
             self._resize_shape = resize_shape
-            self._cropper = CropToEnvBox(env_name)
+            self._cropper = CropToEnv(env_name)
 
         def process_step(self, observation, reward, done, info):
             """Processes an entire step.
