@@ -167,7 +167,6 @@ class FrameAutoencoder(Model):
             BaseLayer.build(self, input_shape)
 
 
-# TODO: What is the binary input type?
 class BinaryRBM(Model):
     """Model of a Restricted Boltzmann Machine.
 
@@ -184,6 +183,12 @@ class BinaryRBM(Model):
         # Store
         self.n_visible = n_visible
         self.n_hidden = n_hidden
+
+        # Two layers
+        self.layers = self.BernoulliPair(
+            n_visible=n_visible, n_hidden=n_hidden)
+
+        # Save
         self.keras = None  # TODO
         self.computed_gradient = True
 
@@ -209,8 +214,49 @@ class BinaryRBM(Model):
         # TODO: there is something to visualize, actually
         return {}
 
+    def _compute_gradient(self, v):
+        """Compute the gradient for the current batch.
+
+        The method is one-step Contrastive Divergence, CD-1.
+
+        :param inputs: batch of observed visible vectors.
+            Binary float values of shape (batch, n_visible).
+        """
+
+        # Sampling
+        expected_h = self.layers.expected_h(v)
+        sampled_h = self.layers.sample_h(v, expected_h=expected_h)
+        sampled_v = self.layers.sample_v(sampled_h)
+        expected_h2 = self.layers.expected_h(sampled_v)
+
+        # CD-1 approximation
+        W_gradients_batch = (tf.einsum("bi,bj->bij", v, expected_h) -
+            tf.einsum("bi,bj->bij", sampled_v, expected_h2))
+        bv_gradients_batch = (v - sampled_v)
+        bh_gradients_batch = (expected_h - expected_h2)
+
+        # Average batch dimension
+        W_gradient = tf.math.reduce_mean(W_gradients_batch, axis=0)
+        bv_gradient = tf.math.reduce_mean(bv_gradients_batch, axis=0)
+        bh_gradient = tf.math.reduce_mean(bh_gradients_batch, axis=0)
+        gradients = dict(W=W_gradient, bv=bv_gradient, bh=bh_gradient)
+
+        # Return gradients with the correct association
+        variables = [var.name for var in self.layers.trainable_variables]
+        variables = [(name[:name.find(":")] if ":" in name else name)
+            for name in variables]
+        assert len(variables) == 3, "Expected: W, bv, bh"
+        gradients_vector = [gradients[var] for var in variables]
+
+        return gradients_vector
+
+
     class BernoulliPair(BaseLayer):
-        """A pair of layers composed of binary units."""
+        """A pair of layers composed of binary units.
+
+        To avoid type casts, all values are assumed floats, even for binary
+        units.
+        """
 
         def __init__(self, *, n_visible, n_hidden):
             """Initialize.
@@ -227,50 +273,84 @@ class BinaryRBM(Model):
                 n_visible=n_visible, n_hidden=n_hidden)
 
             # Define parameters
-            self.W = self.add_weight(
+            self._W = self.add_weight(
                 name="W", shape=(n_visible, n_hidden),
                 dtype=tf.float32, trainable=True)
-            self.bv = self.add_weight(
-                name="bv", shape=(n_visible, 1),
+            self._bv = self.add_weight(
+                name="bv", shape=(n_visible,),
                 dtype=tf.float32, trainable=True)
-            self.bh = self.add_weight(
-                name="bh", shape=(n_hidden, 1),
+            self._bh = self.add_weight(
+                name="bh", shape=(n_hidden,),
                 dtype=tf.float32, trainable=True)
+
+            # Already built
+            self.built = True
 
         def expected_h(self, v):
             """Expected hidden vector (a probability).
 
-            :param v: observed visible vector
-            :return: the expected value of the hidden layer given the
-                observation.
+            :param v: batch of observed visible vectors.
+                Binary values of shape (batch, n_visible).
+            :return: batch of expected values of the hidden layers given the
+                observations.
             """
 
             mean_h = tf.math.sigmoid(
-                tf.linalg.matmul(self.W, v, transpose_a=True) + self.bh)
+                tf.einsum("ji,bj->bi", self._W, v) + self._bh)
             return mean_h
 
         def expected_v(self, h):
             """Expected visible vector (a probability).
 
-            :param h: "observed" hidden vector
-            :return: the expected value of the visible layer given the
-                observation.
+            :param h: batch of "observed" hidden vectors.
+                Binary values of shape (batch, n_hidden).
+            :return: batch of expected values of the visible layers given the
+                observations.
             """
 
             mean_v = tf.math.sigmoid(
-                tf.linalg.matmul(self.W, h) + self.bv)
+                tf.einsum("ij,bj->bi", self._W, h) + self._bv)
             return mean_v
 
-        def sample_h(self, v):
-            """Sample hidden vector given visible."""
-            # TODO
+        def sample_h(self, v, expected_h=None):
+            """Sample hidden vector given visible.
 
-        def sample_v(self, h):
-            """Sample visible vector given hidden."""
-            # TODO
+            :param v: batch of observed visible vectors.
+                Binary values of shape (batch, n_visible).
+            :param expected_h: use these expected values, if already available.
+            :return: batch of sampled hidden units.
+            """
+
+            output_shape = (v.shape[0], self._bh.shape[0])
+
+            mean_h = self.expected_h(v) if expected_h is None else expected_h
+            uniform_samples = tf.random.uniform(output_shape, 0, 1)
+            binary_samples = tf.where(uniform_samples < mean_h, 1, 0)
+
+            return tf.cast(binary_samples, tf.float32)
+
+        def sample_v(self, h, expected_v=None):
+            """Sample visible vector given hidden.
+
+            :param h: batch of observed hidden vectors.
+                Binary values of shape (batch, n_hidden).
+            :param expected_v: use these expected values, if already available.
+            :return: batch of sampled visible units.
+            """
+
+            output_shape = (h.shape[0], self._bv.shape[0])
+
+            mean_v = self.expected_v(h) if expected_v is None else expected_v
+            uniform_samples = tf.random.uniform(output_shape, 0, 1)
+            binary_samples = tf.where(uniform_samples < mean_v, 1, 0)
+
+            return tf.cast(binary_samples, tf.float32)
 
         def call(self, inputs):
-            """I define a forward pass as computing h."""
+            """I define a forward pass as computing the expected h.
+            
+            See expected_h().
+            """
 
             return self.expected_h(inputs)
 
