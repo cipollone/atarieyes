@@ -1,6 +1,8 @@
 """Definitions of networks used for feature extraction."""
 
 from abc import abstractmethod
+import numpy as np
+import gym
 import tensorflow as tf
 
 from atarieyes import layers
@@ -113,7 +115,7 @@ class FrameAutoencoder(Model):
 
         # Ret
         ret = dict(
-            outputs=(encoded, decoded), loss=loss, metrics={}, gradients=None)
+            outputs=[encoded, decoded], loss=loss, metrics={}, gradients=None)
         return ret
 
     @staticmethod
@@ -169,6 +171,7 @@ class BinaryRBM(Model):
     """Model of a Restricted Boltzmann Machine.
 
     This model assumes binary hidden and observed units.
+    Assuming every tensor is a float.
     """
 
     def __init__(self, n_visible, n_hidden):
@@ -207,13 +210,12 @@ class BinaryRBM(Model):
         """Compute all tensors."""
 
         # Compute gradients and all
-        inputs = tf.cast(inputs, tf.float32)
         gradients, tensors = self.layers.compute_gradients(inputs)
         free_energy = self.layers.free_energy(inputs)
 
         # Ret
         ret = dict(
-            outputs=(tensors["expected_h"], tensors["expected_v"]),
+            outputs=[tensors["expected_h"], tensors["expected_v"]],
             loss=None,
             metrics=dict(free_energy=free_energy),
             gradients=gradients)
@@ -230,7 +232,6 @@ class BinaryRBM(Model):
         """
 
         # Forward
-        inputs = tf.cast(inputs, tf.float32)
         output = self.layers.expected_h(inputs)
 
         return output
@@ -428,6 +429,90 @@ class BinaryRBM(Model):
             return gradients_vector, tensors
 
 
-class LocalFeature(Model):
-    # TODO
-    pass
+class LocalFluent(Model):
+    """Model for binary local features.
+
+    A LocalFluent is a binary function of a small portion of the observation.
+    For each frame of the game, a LocalFluent has a fixed truth value which
+    can be computed from just a small portion of the image.
+    This model is composed by a RBM (and some other parts that will be added).
+    """
+
+    def __init__(self, env_name, region):
+        """Initialize.
+
+        :param env_name: a gym environment name.
+        :param region: name of the selected region.
+        """
+
+        # Store
+        self._env_name = env_name
+        self._region_name = region
+        self._frame_shape = gym.make(env_name).observation_space.shape
+
+        # Preprocessing
+        self.preprocessing = layers.LocalFeaturePreprocessing(
+            env_name=env_name, region=region,
+            threshold=0.2, max_pixels=500,
+        )
+        self.flatten = tf.keras.layers.Flatten()
+
+        # Compute shape
+        fake_input = np.zeros(shape=(1, *self._frame_shape), dtype=np.uint8)
+        self._region_shape = self.preprocessing(fake_input).shape[1:]
+        n_pixels = self._region_shape.num_elements()
+
+        # RBM block. TODO: n_hidden should depend on the type of region; how?
+        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=6)
+
+        # Keras model
+        inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
+        ret = self.compute_all(inputs)
+        outputs = (
+            *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
+
+        model = tf.keras.Model(
+            inputs=inputs, outputs=outputs, name="LocalFluentModel")
+
+        # Let keras register the variables
+        model._variables = self.rbm.keras.trainable_variables
+        assert model.trainable_variables == self.rbm.keras.trainable_variables
+
+        # Save
+        self.keras = model
+        self.computed_gradient = True
+
+    def compute_all(self, inputs):
+        """Compute all tensors."""
+
+        # Compute all
+        out = self.preprocessing(inputs)
+        out = self.flatten(out)
+        out = self.rbm.compute_all(out)
+
+        # Expected_v is an image
+        expected_v = out["outputs"][1]
+        out["outputs"][1] = tf.reshape(expected_v, [-1, *self._region_shape])
+
+        return out
+
+    def predict(self, inputs):
+        """Predict the most probable value of the fluent.
+
+        :param inputs: one batch.
+        :return: batch of zeros and ones.
+        """
+
+        # Maximum likelihood
+        out = self.preprocessing(inputs)
+        out = self.flatten(out)
+        expected_h = self.rbm.predict(out)
+        ml_h = tf.where(expected_h > 0.5, 1.0, 0.0)
+
+        return ml_h
+
+    @staticmethod
+    def output_images(outputs):
+        """Get images from outputs."""
+
+        return dict(expected_region=outputs[1])

@@ -36,8 +36,10 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
+        # TODO: LocalFluent
+        # TODO: test compatibility with both models.
         self.model = models.BinaryRBM(
-            n_visible=10, n_hidden=10,   # TODO: real params
+            n_visible=10, n_hidden=10,
         )
 
         # Optimization
