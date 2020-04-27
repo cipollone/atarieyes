@@ -190,36 +190,39 @@ class BinaryRBM(Model):
 
         # Keras model
         inputs = tf.keras.Input(shape=[n_visible], dtype=tf.float32)
-        ret = self.compute_all(inputs)  # TODO: python_function when tf.function
-        outputs = (*ret["outputs"], ret["gradients"])  # TODO: maybe loss
+        ret = self.compute_all.python_function(inputs)
+        outputs = (
+            *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
 
         model = tf.keras.Model(
             inputs=inputs, outputs=outputs, name="BinaryRBM")
+
+        # Let keras register the variables
+        model._variables = self.layers.trainable_variables
+        assert model.trainable_variables == self.layers.trainable_variables
 
         # Save
         self.keras = model
         self.computed_gradient = True
 
-    # TODO: tf.function
+    @tf.function
     def compute_all(self, inputs):
         """Compute all tensors."""
 
-        # Forward
+        # Compute gradients and all
         inputs = tf.cast(inputs, tf.float32)
-        output = self.layers(inputs)
-
-        # Gradient
-        gradients = self._compute_gradient(inputs)
+        gradients, tensors = self.layers.compute_gradients(inputs)
+        free_energy = self.layers.free_energy(inputs)
 
         # Ret
         ret = dict(
-            outputs=(output,), loss=None, metrics={}, gradients=gradients)
+            outputs=(tensors["expected_h"], tensors["expected_v"]),
+            loss=None,
+            metrics=dict(free_energy=free_energy),
+            gradients=gradients)
         return ret
 
-        # TODO: ensure model.trainable_variables is layers.trainable_variables
-        # TODO: I could use the energy function as loss
-
-    # TODO: tf.function
+    @tf.function
     def predict(self, inputs):
         """Make a prediction with the model.
 
@@ -232,7 +235,7 @@ class BinaryRBM(Model):
 
         # Forward
         inputs = tf.cast(inputs, tf.float32)
-        output = self.layers(inputs)
+        output = self.layers.expected_h(inputs)
 
         return output
 
@@ -240,46 +243,7 @@ class BinaryRBM(Model):
     def output_images(outputs):
         """Get images from outputs."""
 
-        # TODO: there is something to visualize, actually
         return {}
-
-    def _compute_gradient(self, v):
-        """Compute the gradient for the current batch.
-
-        The method is one-step Contrastive Divergence, CD-1.
-
-        :param inputs: batch of observed visible vectors.
-            Binary float values of shape (batch, n_visible).
-        """
-
-        # Sampling
-        expected_h = self.layers.expected_h(v)
-        sampled_h = self.layers.sample_h(v, expected_h=expected_h)
-        sampled_v = self.layers.sample_v(sampled_h)
-        expected_h2 = self.layers.expected_h(sampled_v)
-
-        # CD-1 approximation
-        W_gradients_batch = (
-            tf.einsum("bi,bj->bij", v, expected_h) -
-            tf.einsum("bi,bj->bij", sampled_v, expected_h2))
-        bv_gradients_batch = (v - sampled_v)
-        bh_gradients_batch = (expected_h - expected_h2)
-
-        # Average batch dimension
-        W_gradient = tf.math.reduce_mean(W_gradients_batch, axis=0)
-        bv_gradient = tf.math.reduce_mean(bv_gradients_batch, axis=0)
-        bh_gradient = tf.math.reduce_mean(bh_gradients_batch, axis=0)
-        gradients = dict(W=W_gradient, bv=bv_gradient, bh=bh_gradient)
-
-        # Return gradients with the correct association
-        variables = [var.name for var in self.layers.trainable_variables]
-        variables = [
-            (name[:name.find(":")] if ":" in name else name)
-            for name in variables]
-        assert len(variables) == 3, "Expected: W, bv, bh"
-        gradients_vector = [gradients[var] for var in variables]
-
-        return gradients_vector
 
     class BernoulliPair(BaseLayer):
         """A pair of layers composed of binary units.
@@ -333,7 +297,7 @@ class BinaryRBM(Model):
 
             mean_h = tf.math.sigmoid(
                 tf.einsum("ji,bj->bi", self._W, v) + self._bh)
-            return mean_h
+            return tf.identity(mean_h, name="expected_h")
 
         def expected_v(self, h):
             """Expected visible vector (a probability).
@@ -346,7 +310,7 @@ class BinaryRBM(Model):
 
             mean_v = tf.math.sigmoid(
                 tf.einsum("ij,bj->bi", self._W, h) + self._bv)
-            return mean_v
+            return tf.identity(mean_v, name="expected_v")
 
         def sample_h(self, v, expected_h=None):
             """Sample hidden vector given visible.
@@ -363,7 +327,7 @@ class BinaryRBM(Model):
             uniform_samples = tf.random.uniform(output_shape, 0, 1)
             binary_samples = tf.where(uniform_samples < mean_h, 1.0, 0.0)
 
-            return binary_samples
+            return tf.identity(binary_samples, name="sampled_h")
 
         def sample_v(self, h, expected_v=None):
             """Sample visible vector given hidden.
@@ -380,7 +344,26 @@ class BinaryRBM(Model):
             uniform_samples = tf.random.uniform(output_shape, 0, 1)
             binary_samples = tf.where(uniform_samples < mean_v, 1.0, 0.0)
 
-            return binary_samples
+            return tf.identity(binary_samples, name="sampled_v")
+
+        def free_energy(self, v):
+            """Compute the free energy.
+
+            RBM is an energy based model. Given (v,h), The Energy is a measure
+            of the likelihood of this observation. Since h is hidden, we can
+            marginalize it out to compute the free energy.
+
+            :param v: batch of observed visible vectors.
+                Binary float values of shape (batch, n_visible).
+            :return: a scalar
+            """
+
+            term0 = -tf.einsum("j,bj->b", self._bv, v)
+            term1 = tf.einsum("ji,bj->bi", self._W, v) + self._bh
+            term1 = -tf.math.reduce_sum(term1, axis=1)
+            free_energy = term0 + term1
+
+            return tf.identity(free_energy, "free_energy")
 
         def call(self, inputs):
             """I define a forward pass as computing the expected h.
@@ -390,8 +373,56 @@ class BinaryRBM(Model):
 
             return self.expected_h(inputs)
 
+        def compute_gradients(self, v):
+            """Compute the gradient for the current batch.
+
+            The method is one-step Contrastive Divergence, CD-1.
+
+            :param v: batch of observed visible vectors.
+                Binary float values of shape (batch, n_visible).
+            :return: (gradients, tensors). Gradients is a list, one for
+                each trainable variable in this layer. Tensors is a dict
+                of computed values.
+            """
+
+            # Sampling
+            expected_h = self.expected_h(v)
+            sampled_h = self.sample_h(v, expected_h=expected_h)
+            expected_v = self.expected_v(sampled_h)
+            sampled_v = self.sample_v(sampled_h, expected_v=expected_v)
+            expected_h2 = self.expected_h(sampled_v)
+
+            # CD-1 approximation
+            W_gradients_batch = (
+                tf.einsum("bi,bj->bij", v, expected_h) -
+                tf.einsum("bi,bj->bij", sampled_v, expected_h2))
+            bv_gradients_batch = (v - sampled_v)
+            bh_gradients_batch = (expected_h - expected_h2)
+
+            # Average batch dimension
+            W_gradient = tf.math.reduce_mean(W_gradients_batch, axis=0)
+            bv_gradient = tf.math.reduce_mean(bv_gradients_batch, axis=0)
+            bh_gradient = tf.math.reduce_mean(bh_gradients_batch, axis=0)
+            gradients = dict(
+                W=tf.identity(W_gradient, name="W_gradient"),
+                bv=tf.identity(bv_gradient, name="bv_gradient"),
+                bh=tf.identity(bh_gradient, name="bh_gradient"),
+            )
+
+            # Return gradients with the correct association
+            variables = [var.name for var in self.trainable_variables]
+            variables = [
+                (name[:name.find(":")] if ":" in name else name)
+                for name in variables]
+            assert len(variables) == 3, "Expected: W, bv, bh"
+            gradients_vector = [gradients[var] for var in variables]
+
+            # Ret
+            tensors = dict(expected_h=expected_h, expected_v=expected_v)
+
+            return gradients_vector, tensors
+
 
 class LocalFeature(Model):
     # TODO
-
-    
+    pass

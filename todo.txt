@@ -8,8 +8,7 @@ Agent:
 
 Features:
 	Todo next:
-		- Binary RBM model definition
-		- Preprocessing from feature
+		- Layers and tensorboard graph? Layerise functions
 	Todo later/maybe:
 
 Done:
