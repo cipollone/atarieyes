@@ -104,6 +104,7 @@ class Trainer:
 
         return outputs
 
+    # TODO: maybe tf.fuction because it's not in models anymore
     def valuate(self, step, outputs=None):
         """Compute the metrics on one batch and save a log.
 
@@ -208,6 +209,7 @@ class TensorBoardLogger:
         :param input_shape: the shape of the input tensor of the model
             (without batch).
         """
+        # TODO: maybe this shoud save compute_all()
 
         # Forward pass
         @tf.function

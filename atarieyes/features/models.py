@@ -4,7 +4,7 @@ from abc import abstractmethod
 import tensorflow as tf
 
 from atarieyes import layers
-from atarieyes.layers import BaseLayer
+from atarieyes.layers import BaseLayer, make_layer
 from atarieyes.tools import ABC2, AbstractAttribute
 
 
@@ -81,7 +81,7 @@ class FrameAutoencoder(Model):
 
         # Keras model
         inputs = tf.keras.Input(shape=frame_shape, dtype=tf.uint8)
-        ret = self.compute_all.python_function(inputs)
+        ret = self.compute_all(inputs)
         outputs = (*ret["outputs"], ret["loss"])
 
         model = tf.keras.Model(
@@ -92,14 +92,12 @@ class FrameAutoencoder(Model):
         self.keras = model
         self.computed_gradient = False
 
-    @tf.function
     def predict(self, inputs):
         """Make predictions."""
 
         inputs = self.preprocessing(inputs)
         return self.encoder(inputs)
 
-    @tf.function
     def compute_all(self, inputs):
         """Compute all tensors."""
 
@@ -190,7 +188,7 @@ class BinaryRBM(Model):
 
         # Keras model
         inputs = tf.keras.Input(shape=[n_visible], dtype=tf.float32)
-        ret = self.compute_all.python_function(inputs)
+        ret = self.compute_all(inputs)
         outputs = (
             *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
 
@@ -205,7 +203,6 @@ class BinaryRBM(Model):
         self.keras = model
         self.computed_gradient = True
 
-    @tf.function
     def compute_all(self, inputs):
         """Compute all tensors."""
 
@@ -222,7 +219,6 @@ class BinaryRBM(Model):
             gradients=gradients)
         return ret
 
-    @tf.function
     def predict(self, inputs):
         """Make a prediction with the model.
 
@@ -282,6 +278,15 @@ class BinaryRBM(Model):
             self._bh = self.add_weight(
                 name="bh", shape=(n_hidden,),
                 dtype=tf.float32, trainable=True)
+
+            # Transform functions to layers (optional, for a nice graph)
+            self.expected_h = make_layer("Expected_h", self.expected_h)()
+            self.expected_v = make_layer("Expected_v", self.expected_v)()
+            self.sample_h = make_layer("Sample_h", self.sample_h)()
+            self.sample_v = make_layer("Sample_v", self.sample_v)()
+            self.free_energy = make_layer("FreeEnergy", self.free_energy)()
+            self.compute_gradients = make_layer(
+                "ComputeGradients", self.compute_gradients)()
 
             # Already built
             self.built = True
