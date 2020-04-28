@@ -8,7 +8,6 @@ Agent:
 
 Features:
 	Todo next:
-		- tf.function
 		- Stable training for LocalFluent
 	Todo later/maybe:
 

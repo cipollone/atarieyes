@@ -13,8 +13,9 @@ def main():
 
     # Defaults
     features_defaults = dict(
+        log_frequency=10,
+        save_frequency=50,
         batch_size=10,
-        log_frequency=20,
         learning_rate=1e-3,
     )
     agent_defaults = dict(
@@ -173,10 +174,14 @@ def main():
         dest="batch_size", help="Training batch size")
     features_train.add_argument(
         "-l", "--logs", type=int, default=features_defaults["log_frequency"],
-        help="Save logs after this number of batches")
+        dest="log_frequency", help="Save logs after this number of batches")
     features_train.add_argument(
-        "-c", "--continue", action="store_true", dest="cont",
-        help="Continue from previous training")
+        "-s", "--saves", type=int, default=features_defaults["save_frequency"],
+        dest="save_frequency",
+        help="Save checkpoints after this number of batches")
+    features_train.add_argument(
+        "-c", "--continue", dest="cont", type=int, metavar="STEP",
+        help="Continue from the checkpoint of step numer..")
     features_train.add_argument(
         "-r", "--rate", type=float, default=features_defaults["learning_rate"],
         dest="learning_rate", help="Learning rate")

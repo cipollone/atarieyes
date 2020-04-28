@@ -79,7 +79,7 @@ class FrameAutoencoder(Model):
             env_name=env_name, out_size=(80, 80), grayscale=True,
             resize_method="nearest")
         self.scale_to = layers.ScaleTo(from_range=(-1, 1), to_range=(0, 255))
-        self.loss = layers.LossMAE()
+        self.loss = layers.LossMSE()
 
         # Keras model
         inputs = tf.keras.Input(shape=frame_shape, dtype=tf.uint8)

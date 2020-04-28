@@ -1,6 +1,7 @@
 """This module allows to train a feature extractor."""
 
 import os
+import json
 import gym
 import numpy as np
 import tensorflow as tf
@@ -8,9 +9,6 @@ import tensorflow as tf
 from atarieyes.features import models
 from atarieyes import tools
 from atarieyes.streaming import AtariFramesReceiver
-
-# TODO: logger and saver should behave as agent's
-# TODO: @tf.function for train_step and valuate
 
 
 class Trainer:
@@ -23,8 +21,12 @@ class Trainer:
         """
 
         # Init
-        self.log_frequency = args.logs
-        self.cont = args.cont
+        self.log_frequency = args.log_frequency
+        self.save_frequency = args.save_frequency
+        self.cont = bool(args.cont)
+        self.init_step = args.cont if self.cont else 0
+
+        # Dirs
         model_path, log_path = tools.prepare_directories(
             "features", args.env, resuming=self.cont, args=args)
 
@@ -52,14 +54,14 @@ class Trainer:
     def train(self):
         """Train."""
 
+        step = self.init_step
+
         # New run
         if not self.cont:
             self.logger.save_graph(self.frame_shape)
-            step = 0
         # Restore
         else:
-            step = self.saver.load()
-            print("> Weights restored.")
+            self.saver.load(step)
 
             # Initial valuation
             self.valuate(step)
@@ -73,14 +75,16 @@ class Trainer:
             outputs = self.train_step()
 
             # Logs and savings
-            if step % self.log_frequency == 0:
-
+            relative_step = step - self.init_step
+            if relative_step % self.log_frequency == 0:
                 metrics = self.valuate(step, outputs)
-                self.saver.save(step)
                 print("Step ", step, ", ", metrics, sep="", end="          \r")
+            if relative_step % self.save_frequency == 0 and relative_step > 0:
+                self.saver.save(step)
 
             step += 1
 
+    @tf.function
     def train_step(self):
         """Applies a single training step.
 
@@ -116,7 +120,7 @@ class Trainer:
         # Compute if not given
         if not outputs:
             frames = next(self.dataset_it)
-            outputs = self.model.compute_all(frames)
+            outputs = self._model_compute_all(frames)
 
         # Log scalars
         metrics = {
@@ -132,9 +136,16 @@ class Trainer:
 
         return metrics
 
+    @tf.function
+    def _model_compute_all(self, inputs):
+        """Efficient graph call for Model.compute_all."""
+
+        return self.model.compute_all(inputs)
 
 class CheckpointSaver:
     """Save weights and restore."""
+
+    save_format = "h5"
 
     def __init__(self, model, path):
         """Initialize.
@@ -143,10 +154,33 @@ class CheckpointSaver:
         :param path: directory where checkpoints should be saved.
         """
 
-        self.save_path = os.path.join(path, model.name)
-        self.counters_path = os.path.join(path, "counters.txt")
+        # Store
         self.model = model
         self.score = float("-inf")
+
+        self.counters_file = os.path.join(path, "counters.json")
+        self.step_checkpoints = os.path.join(
+            path, model.name + "_weights_{step}." + self.save_format)
+
+    def _update_counters(self, filepath, step):
+        """Updates the file of counters with a new entry.
+
+        :param filepath: checkpoint that is being saved
+        :param step: current global step
+        """
+
+        counters = {}
+
+        # Load
+        if os.path.exists(self.counters_file):
+            with open(self.counters_file) as f:
+                counters = json.load(f)
+
+        counters[filepath] = dict(step=step)
+
+        # Save
+        with open(self.counters_file, "w") as f:
+            json.dump(counters, f, indent=4)
 
     def save(self, step, score=None):
         """Save.
@@ -165,29 +199,24 @@ class CheckpointSaver:
                 self.score = score
 
         # Save
+        filepath = self.step_checkpoints.format(step=step)
         self.model.save_weights(
-            self.save_path, overwrite=True, save_format="tf")
-        with open(self.counters_path, "w") as f:
-            f.write("step: " + str(step))
+            filepath, overwrite=True, save_format=self.save_format)
+        self._update_counters(filepath=filepath, step=step)
+
         return True
 
-    def load(self):
-        """Restore weights from the previous checkpoint.
+    def load(self, step):
+        """Load the weights from a checkpoint.
 
-        NOTE: optimizer state is not restored.
-
-        :return: the step of the saved weights
+        :param step: specify which checkpoint to load
         """
 
+        filepath = self.step_checkpoints.format(step=step)
+
         # Restore
-        self.model.load_weights(self.save_path)
-
-        # Step
-        with open(self.counters_path) as f:
-            counters = f.read()
-        step = int(counters.split(":")[1])
-
-        return step
+        self.model.load_weights(filepath)
+        print("> Loaded:", filepath)
 
 
 class TensorBoardLogger:
