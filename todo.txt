@@ -8,7 +8,8 @@ Agent:
 
 Features:
 	Todo next:
-		- Update feature Trainer. Check compatibility with both models.
+		- tf.function
+		- Stable training for LocalFluent
 	Todo later/maybe:
 
 Done:

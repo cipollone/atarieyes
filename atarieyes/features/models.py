@@ -63,17 +63,17 @@ class FrameAutoencoder(Model):
     This is an autoencoder which encodes a single frame of the game.
     """
 
-    def __init__(self, frame_shape, env_name):
+    def __init__(self, env_name):
         """Initialize.
 
-        :param frame_shape: the shape of the input frame (sequence of ints).
-            Assuming channel is last.
         :param env_name: a gym environment name.
         """
 
+        frame_shape = gym.make(env_name).observation_space.shape
+
         # Define structure
-        self.encoder = self.Encoder(verbose=True)
-        self.decoder = self.Decoder(verbose=True)
+        self.encoder = self.Encoder()
+        self.decoder = self.Decoder()
 
         self.preprocessing = layers.ImagePreprocessing(
             env_name=env_name, out_size=(80, 80), grayscale=True,
@@ -211,7 +211,7 @@ class BinaryRBM(Model):
 
         # Compute gradients and all
         gradients, tensors = self.layers.compute_gradients(inputs)
-        free_energy = self.layers.free_energy(inputs)
+        free_energy = tf.math.reduce_mean(self.layers.free_energy(inputs))
 
         # Ret
         ret = dict(
@@ -437,8 +437,9 @@ class LocalFluent(Model):
     can be computed from just a small portion of the image.
     This model is composed by a RBM (and some other parts that will be added).
     """
+    # TODO: n_hidden and region should be parametric. How?
 
-    def __init__(self, env_name, region):
+    def __init__(self, env_name, region="left_column"):
         """Initialize.
 
         :param env_name: a gym environment name.
@@ -462,7 +463,7 @@ class LocalFluent(Model):
         self._region_shape = self.preprocessing(fake_input).shape[1:]
         n_pixels = self._region_shape.num_elements()
 
-        # RBM block. TODO: n_hidden should depend on the type of region; how?
+        # RBM block
         self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=6)
 
         # Keras model

@@ -9,6 +9,9 @@ from atarieyes.features import models
 from atarieyes import tools
 from atarieyes.streaming import AtariFramesReceiver
 
+# TODO: logger and saver should behave as agent's
+# TODO: @tf.function for train_step and valuate
+
 
 class Trainer:
     """Train a feature extractor."""
@@ -36,20 +39,15 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        # TODO: LocalFluent
-        # TODO: test compatibility with both models.
-        self.model = models.BinaryRBM(
-            n_visible=10, n_hidden=10,
-        )
+        self.model = models.LocalFluent(args.env)
 
         # Optimization
-        self.params = self.model.keras.trainable_variables \
-            if not self.model.computed_gradient else None
+        self.params = self.model.keras.trainable_variables
         self.optimizer = tf.optimizers.Adam(args.learning_rate)
 
         # Tools
         self.saver = CheckpointSaver(self.model.keras, model_path)
-        self.logger = TensorBoardLogger(self.model.keras, log_path)
+        self.logger = TensorBoardLogger(self.model, log_path)
 
     def train(self):
         """Train."""
@@ -78,12 +76,11 @@ class Trainer:
             if step % self.log_frequency == 0:
 
                 metrics = self.valuate(step, outputs)
-                self.saver.save(step, -metrics["loss"])
+                self.saver.save(step)
                 print("Step ", step, ", ", metrics, sep="", end="          \r")
 
             step += 1
 
-    @tf.function
     def train_step(self):
         """Applies a single training step.
 
@@ -92,8 +89,8 @@ class Trainer:
 
         # Custom gradient
         if self.model.computed_gradient:
-            gradients = self.model.compute_all(
-                next(self.dataset_it))["gradients"]
+            outputs = self.model.compute_all(next(self.dataset_it))
+            gradients = outputs["gradients"]
 
         # Compute
         else:
@@ -106,7 +103,6 @@ class Trainer:
 
         return outputs
 
-    # TODO: maybe tf.fuction because it's not in models anymore
     def valuate(self, step, outputs=None):
         """Compute the metrics on one batch and save a log.
 
@@ -123,8 +119,11 @@ class Trainer:
             outputs = self.model.compute_all(frames)
 
         # Log scalars
-        metrics = dict(outputs["metrics"])
-        metrics["loss"] = outputs["loss"]
+        metrics = {
+            "metrics/" + name: value
+            for name, value in outputs["metrics"].items()}
+        if outputs["loss"] is not None:
+            metrics["loss"] = outputs["loss"]
         self.logger.save_scalars(step, metrics)
 
         # Log images
@@ -197,7 +196,7 @@ class TensorBoardLogger:
     def __init__(self, model, path):
         """Initialize.
 
-        :param model: tensorflow model that should be saved.
+        :param model: a features.Model that should be saved.
         :param path: directory where logs should be saved.
         """
 
@@ -211,12 +210,11 @@ class TensorBoardLogger:
         :param input_shape: the shape of the input tensor of the model
             (without batch).
         """
-        # TODO: maybe this shoud save compute_all()
 
         # Forward pass
         @tf.function
         def tracing_model_ops(inputs):
-            return self.model(inputs)
+            return self.model.compute_all(inputs)
 
         inputs = np.zeros((1, *input_shape), dtype=np.uint8)
 
@@ -224,7 +222,7 @@ class TensorBoardLogger:
         tf.summary.trace_on(graph=True)
         tracing_model_ops(inputs)
         with self.summary_writer.as_default():
-            tf.summary.trace_export(self.model.name, step=0)
+            tf.summary.trace_export(self.model.__class__.__name__, step=0)
 
     def save_scalars(self, step, metrics):
         """Save scalars.
