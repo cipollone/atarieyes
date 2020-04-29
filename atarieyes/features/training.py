@@ -319,7 +319,7 @@ def make_dataset(game_player, batch, frame_shape):
     dataset = tf.data.Dataset.from_generator(
         frame_iterate, output_types=tf.uint8, output_shapes=frame_shape)
 
-    dataset = dataset.shuffle(500)
+    dataset = dataset.shuffle(1000)
     dataset = dataset.batch(batch)
     dataset = dataset.prefetch(1)
 

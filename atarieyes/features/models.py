@@ -255,7 +255,15 @@ class BinaryRBM(Model):
     def histograms(self, outputs):
         """Tensors to visualize."""
 
-        return {}
+        tensors = {
+            "weigths/W": self.layers._W.value(),
+            "weigths/bv": self.layers._bv.value(),
+            "weigths/bh": self.layers._bh.value(),
+            "outputs/expected_h": outputs[0],
+            "outputs/expected_v": outputs[1],
+        }
+
+        return tensors
 
     class BernoulliPair(BaseLayer):
         """A pair of layers composed of binary units.
@@ -287,13 +295,14 @@ class BinaryRBM(Model):
             # Define parameters
             self._W = self.add_weight(
                 name="W", shape=(n_visible, n_hidden),
-                dtype=tf.float32, trainable=True)
+                dtype=tf.float32, trainable=True,
+                initializer=tf.keras.initializers.TruncatedNormal(0.0, 0.01))
             self._bv = self.add_weight(
                 name="bv", shape=(n_visible,),
-                dtype=tf.float32, trainable=True)
+                dtype=tf.float32, trainable=True, initializer="zeros")
             self._bh = self.add_weight(
                 name="bh", shape=(n_hidden,),
-                dtype=tf.float32, trainable=True)
+                dtype=tf.float32, trainable=True, initializer="zeros")
 
             # Transform functions to layers (optional, for a nice graph)
             self.expected_h = make_layer("Expected_h", self.expected_h)()
@@ -424,6 +433,13 @@ class BinaryRBM(Model):
             W_gradient = tf.math.reduce_mean(W_gradients_batch, axis=0)
             bv_gradient = tf.math.reduce_mean(bv_gradients_batch, axis=0)
             bh_gradient = tf.math.reduce_mean(bh_gradients_batch, axis=0)
+
+            # Negatives for gradient Descent
+            W_gradient = -W_gradient
+            bv_gradient = -bv_gradient
+            bh_gradient = -bh_gradient
+
+            # Collect and rename
             gradients = dict(
                 W=tf.identity(W_gradient, name="W_gradient"),
                 bv=tf.identity(bv_gradient, name="bv_gradient"),
@@ -537,10 +553,4 @@ class LocalFluent(Model):
     def histograms(self, outputs):
         """Tensors to visualize."""
 
-        tensors = {
-            "weights/" + var.name: var.value()
-            for var in self.keras.trainable_variables
-        }
-        tensors["output"] = outputs[0]
-
-        return tensors
+        return self.rbm.histograms(outputs)
