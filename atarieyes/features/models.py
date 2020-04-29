@@ -45,15 +45,22 @@ class Model(ABC2):
             list of computed gradients.
         """
 
-    @staticmethod
     @abstractmethod
-    def output_images(outputs):
-        """Returns the images from all outputs.
+    def images(self, outputs):
+        """Returns a set of images to visualize.
 
         :param outputs: a sequence of outputs, as returned by
             compute_all["outputs"].
-        :return: a dict of {name: images} where each 'images' is a batch
-            extracted from outputs. The dict can be empty.
+        :return: a dict of {name: images}. The dict can be empty.
+        """
+
+    @abstractmethod
+    def histograms(self, outputs):
+        """Returns a set of tensors to visualize as histograms.
+
+        :param outputs: a sequence of outputs, as returned by
+            compute_all["outputs"].
+        :return: a dict of {name: tensor}. The dict can be empty.
         """
 
 
@@ -118,11 +125,15 @@ class FrameAutoencoder(Model):
             outputs=[encoded, decoded], loss=loss, metrics={}, gradients=None)
         return ret
 
-    @staticmethod
-    def output_images(outputs):
-        """Get images from outputs."""
+    def images(self, outputs):
+        """Images to visualize."""
 
         return {"decoded": outputs[1]}
+
+    def histograms(self, outputs):
+        """Tensors to visualize."""
+
+        return {}
 
     class Encoder(BaseLayer):
 
@@ -215,7 +226,7 @@ class BinaryRBM(Model):
 
         # Ret
         ret = dict(
-            outputs=[tensors["expected_h"], tensors["expected_v"]],
+            outputs=[tensors["expected_h"], tensors["expected_v"], inputs],
             loss=None,
             metrics=dict(free_energy=free_energy),
             gradients=gradients)
@@ -236,9 +247,13 @@ class BinaryRBM(Model):
 
         return output
 
-    @staticmethod
-    def output_images(outputs):
-        """Get images from outputs."""
+    def images(self, outputs):
+        """Images to visualize."""
+
+        return {}
+
+    def histograms(self, outputs):
+        """Tensors to visualize."""
 
         return {}
 
@@ -366,7 +381,7 @@ class BinaryRBM(Model):
 
             term0 = -tf.einsum("j,bj->b", self._bv, v)
             term1 = tf.einsum("ji,bj->bi", self._W, v) + self._bh
-            term1 = -tf.math.reduce_sum(term1, axis=1)
+            term1 = -tf.math.reduce_sum(tf.math.softplus(term1), axis=1)
             free_energy = term0 + term1
 
             return tf.identity(free_energy, "free_energy")
@@ -439,7 +454,7 @@ class LocalFluent(Model):
     """
     # TODO: n_hidden and region should be parametric. How?
 
-    def __init__(self, env_name, region="left_column"):
+    def __init__(self, env_name, region="green_bar"):
         """Initialize.
 
         :param env_name: a gym environment name.
@@ -464,7 +479,7 @@ class LocalFluent(Model):
         n_pixels = self._region_shape.num_elements()
 
         # RBM block
-        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=6)
+        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=30)
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
@@ -491,9 +506,11 @@ class LocalFluent(Model):
         out = self.flatten(out)
         out = self.rbm.compute_all(out)
 
-        # Expected_v is an image
+        # Last two outputs are images
         expected_v = out["outputs"][1]
         out["outputs"][1] = tf.reshape(expected_v, [-1, *self._region_shape])
+        input_v = out["outputs"][2]
+        out["outputs"][2] = tf.reshape(input_v, [-1, *self._region_shape])
 
         return out
 
@@ -512,8 +529,18 @@ class LocalFluent(Model):
 
         return ml_h
 
-    @staticmethod
-    def output_images(outputs):
-        """Get images from outputs."""
+    def images(self, outputs):
+        """Images to visualize."""
 
-        return dict(expected_region=outputs[1])
+        return {"region/expected": outputs[1], "region/input": outputs[2]}
+
+    def histograms(self, outputs):
+        """Tensors to visualize."""
+
+        tensors = {
+            "weights/" + var.name: var.value()
+            for var in self.keras.trainable_variables
+        }
+        tensors["output"] = outputs[0]
+
+        return tensors

@@ -131,8 +131,12 @@ class Trainer:
         self.logger.save_scalars(step, metrics)
 
         # Log images
-        images = self.model.output_images(outputs["outputs"])
+        images = self.model.images(outputs["outputs"])
         self.logger.save_images(step, images)
+
+        # Log histograms
+        histograms = self.model.histograms(outputs["outputs"])
+        self.logger.save_histogram(step, histograms)
 
         return metrics
 
@@ -234,7 +238,7 @@ class TensorBoardLogger:
         self.summary_writer = tf.summary.create_file_writer(path)
 
     def save_graph(self, input_shape):
-        """Save the graph of the model.
+        """Visualize the graph of the model in TensorBoard.
 
         :param input_shape: the shape of the input tensor of the model
             (without batch).
@@ -254,7 +258,7 @@ class TensorBoardLogger:
             tf.summary.trace_export(self.model.__class__.__name__, step=0)
 
     def save_scalars(self, step, metrics):
-        """Save scalars.
+        """Visualize scalar metrics in TensorBoard.
 
         :param step: the step number
         :param metrics: a dict of (name: value)
@@ -266,7 +270,7 @@ class TensorBoardLogger:
                 tf.summary.scalar(name, value, step=step)
 
     def save_images(self, step, images):
-        """Save images in TensorBoard.
+        """Visualize images in TensorBoard.
 
         :param step: the step number
         :param images: a dict of batches of images. Only the first
@@ -279,6 +283,18 @@ class TensorBoardLogger:
                 image = batch[0]
                 image = tf.expand_dims(image, axis=0)
                 tf.summary.image(name, image, step)
+
+    def save_histogram(self, step, tensors):
+        """Visualize tensors as histograms.
+
+        :param step: the step number
+        :param tensors: a dict of (name: tensor)
+        """
+
+        # Save
+        with self.summary_writer.as_default():
+            for name, tensor in tensors.items():
+                tf.summary.histogram(name, tensor, step)
 
 
 def make_dataset(game_player, batch, frame_shape):
@@ -303,6 +319,7 @@ def make_dataset(game_player, batch, frame_shape):
     dataset = tf.data.Dataset.from_generator(
         frame_iterate, output_types=tf.uint8, output_shapes=frame_shape)
 
+    dataset = dataset.shuffle(500)
     dataset = dataset.batch(batch)
     dataset = dataset.prefetch(1)
 
