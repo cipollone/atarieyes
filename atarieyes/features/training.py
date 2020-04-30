@@ -146,6 +146,9 @@ class Trainer:
         histograms = self.model.histograms(outputs["outputs"])
         self.logger.save_histogram(step, histograms)
 
+        # Transform tensors to scalars for nice logs
+        metrics = {name: tensor.numpy() for name, tensor in metrics.items()}
+
         return metrics
 
     @tf.function

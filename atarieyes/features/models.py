@@ -236,6 +236,7 @@ class BinaryRBM(Model):
                 free_energy=free_energy,
                 W_loss_gradient=tensors["W_loss_gradient_size"],
                 W_l2_gradient=tensors["W_l2_gradient_size"],
+                reconstruction_error=tensors["reconstruction_error"],
             ),
             gradients=gradients)
         return ret
@@ -436,8 +437,8 @@ class BinaryRBM(Model):
             for i in range(gibbs_sweeps):
                 sampled_h = self.sample_h(sampled_v, expected_h=expected_h)
                 expected_v = self.expected_v(sampled_h)
+                sampled_v = self.sample_v(sampled_h, expected_v=expected_v)
                 if i < gibbs_sweeps - 1:
-                    sampled_v = self.sample_v(sampled_h, expected_v=expected_v)
                     expected_h = self.expected_h(sampled_v)
 
             # CD approximation
@@ -482,6 +483,8 @@ class BinaryRBM(Model):
                 tf.math.abs(W_prel2_gradient))
             W_l2_gradient_size = tf.math.reduce_max(
                 tf.math.abs(W_l2_gradient))
+            reconstruction_error = tf.reduce_mean(
+                tf.math.abs(v - expected_v))
 
             # Ret
             tensors = dict(
@@ -489,6 +492,7 @@ class BinaryRBM(Model):
                 expected_v=expected_v,
                 W_loss_gradient_size=W_loss_gradient_size,
                 W_l2_gradient_size=W_l2_gradient_size,
+                reconstruction_error=reconstruction_error,
             )
 
             return gradients_vector, tensors

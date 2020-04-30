@@ -8,6 +8,8 @@ Agent:
 
 Features:
 	Todo next:
+		- Store dataset returned by agent, because playing is the most expensive
+			part
 	Todo later/maybe:
 
 Done:
