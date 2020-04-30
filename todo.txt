@@ -8,8 +8,6 @@ Agent:
 
 Features:
 	Todo next:
-		- Debug training for LocalFluent
-		- regularization for W?
 	Todo later/maybe:
 
 Done:

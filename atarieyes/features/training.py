@@ -25,6 +25,8 @@ class Trainer:
         self.save_frequency = args.save_frequency
         self.cont = bool(args.cont)
         self.init_step = args.cont if self.cont else 0
+        self.learning_rate = args.learning_rate
+        self.const_rate = args.const_rate
 
         # Dirs
         model_path, log_path = tools.prepare_directories(
@@ -44,8 +46,12 @@ class Trainer:
         self.model = models.LocalFluent(args.env)
 
         # Optimization
+        if not self.const_rate:
+            self.learning_rate = tf.optimizers.schedules.ExponentialDecay(
+                args.learning_rate, decay_steps=args.decay_steps,
+                decay_rate=0.95)
+        self.optimizer = tf.optimizers.Adam(self.learning_rate)
         self.params = self.model.keras.trainable_variables
-        self.optimizer = tf.optimizers.Adam(args.learning_rate)
 
         # Tools
         self.saver = CheckpointSaver(self.model.keras, model_path)
@@ -128,6 +134,8 @@ class Trainer:
             for name, value in outputs["metrics"].items()}
         if outputs["loss"] is not None:
             metrics["loss"] = outputs["loss"]
+        metrics["learning_rate"] = self.learning_rate if self.const_rate else \
+            self.learning_rate(step)
         self.logger.save_scalars(step, metrics)
 
         # Log images

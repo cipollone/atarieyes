@@ -13,10 +13,11 @@ def main():
 
     # Defaults
     features_defaults = dict(
-        log_frequency=10,
-        save_frequency=50,
-        batch_size=10,
-        learning_rate=1e-3,
+        log_frequency=20,
+        save_frequency=200,
+        batch_size=50,
+        learning_rate=1e-2,
+        decay_steps=100,
     )
     agent_defaults = dict(
         memory_limit=1000000,
@@ -189,6 +190,12 @@ def main():
         "--stream", type=str, default="localhost",
         help="Ip address of a stream of frames. "
         "That machine could be stated with `--watch stream` option.")
+    features_train.add_argument(
+        "--decay-steps", type=int, default=features_defaults["decay_steps"],
+        help="Learning rate decays of 5% after this number of steps.")
+    features_train.add_argument(
+        "--const-rate", action="store_true",
+        help="Disable decaying learning rate.")
 
     # Feature selection op
     feature_select = features_op.add_parser(

@@ -226,9 +226,17 @@ class BinaryRBM(Model):
 
         # Ret
         ret = dict(
-            outputs=[tensors["expected_h"], tensors["expected_v"], inputs],
+            outputs=[
+                tensors["expected_h"],
+                tensors["expected_v"],
+                inputs,
+            ],
             loss=None,
-            metrics=dict(free_energy=free_energy),
+            metrics=dict(
+                free_energy=free_energy,
+                W_loss_gradient=tensors["W_loss_gradient_size"],
+                W_l2_gradient=tensors["W_l2_gradient_size"],
+            ),
             gradients=gradients)
         return ret
 
@@ -291,18 +299,21 @@ class BinaryRBM(Model):
             self._batch_size = batch_size
             self._n_visible = n_visible
             self._n_hidden = n_hidden
+            self._l2_const = 0.01
 
             # Define parameters
             self._W = self.add_weight(
                 name="W", shape=(n_visible, n_hidden),
-                dtype=tf.float32, trainable=True,
-                initializer=tf.keras.initializers.TruncatedNormal(0.0, 0.01))
+                dtype=tf.float32, trainable=True)
             self._bv = self.add_weight(
                 name="bv", shape=(n_visible,),
                 dtype=tf.float32, trainable=True, initializer="zeros")
             self._bh = self.add_weight(
                 name="bh", shape=(n_hidden,),
                 dtype=tf.float32, trainable=True, initializer="zeros")
+
+            # Buffer TODO: use for persistent CD.
+            #self._saved_v = tf.Variable
 
             # Transform functions to layers (optional, for a nice graph)
             self.expected_h = make_layer("Expected_h", self.expected_h)()
@@ -439,6 +450,11 @@ class BinaryRBM(Model):
             bv_gradient = -bv_gradient
             bh_gradient = -bh_gradient
 
+            # Regularization
+            W_prel2_gradient = W_gradient
+            W_l2_gradient = self._l2_const * self._W
+            W_gradient += W_l2_gradient
+
             # Collect and rename
             gradients = dict(
                 W=tf.identity(W_gradient, name="W_gradient"),
@@ -454,8 +470,19 @@ class BinaryRBM(Model):
             assert len(variables) == 3, "Expected: W, bv, bh"
             gradients_vector = [gradients[var] for var in variables]
 
+            # Gradient metrics
+            W_loss_gradient_size = tf.math.reduce_max(
+                tf.math.abs(W_prel2_gradient))
+            W_l2_gradient_size = tf.math.reduce_max(
+                tf.math.abs(W_l2_gradient))
+
             # Ret
-            tensors = dict(expected_h=expected_h, expected_v=expected_v)
+            tensors = dict(
+                expected_h=expected_h,
+                expected_v=expected_v,
+                W_loss_gradient_size=W_loss_gradient_size,
+                W_l2_gradient_size=W_l2_gradient_size,
+            )
 
             return gradients_vector, tensors
 
