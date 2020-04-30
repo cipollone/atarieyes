@@ -417,7 +417,7 @@ class BinaryRBM(Model):
         def compute_gradients(self, v):
             """Compute the gradient for the current batch.
 
-            The method is one-step Contrastive Divergence, CD-1.
+            The method is Contrastive Divergence, CD-k.
 
             :param v: batch of observed visible vectors.
                 Binary float values of shape (batch, n_visible).
@@ -426,19 +426,26 @@ class BinaryRBM(Model):
                 of computed values.
             """
 
-            # Sampling
-            expected_h = self.expected_h(v)
-            sampled_h = self.sample_h(v, expected_h=expected_h)
-            expected_v = self.expected_v(sampled_h)
-            sampled_v = self.sample_v(sampled_h, expected_v=expected_v)
-            expected_h2 = self.expected_h(sampled_v)
+            # Init Gibbs sampling
+            gibbs_sweeps = 3  # k = 3
+            sampled_v = v
+            expected_h0 = self.expected_h(sampled_v)
+            expected_h = expected_h0
 
-            # CD-1 approximation
+            # Sampling
+            for i in range(gibbs_sweeps):
+                sampled_h = self.sample_h(sampled_v, expected_h=expected_h)
+                expected_v = self.expected_v(sampled_h)
+                if i < gibbs_sweeps - 1:
+                    sampled_v = self.sample_v(sampled_h, expected_v=expected_v)
+                    expected_h = self.expected_h(sampled_v)
+
+            # CD approximation
             W_gradients_batch = (
-                tf.einsum("bi,bj->bij", v, expected_h) -
-                tf.einsum("bi,bj->bij", sampled_v, expected_h2))
-            bv_gradients_batch = (v - sampled_v)
-            bh_gradients_batch = (expected_h - expected_h2)
+                tf.einsum("bi,bj->bij", v, expected_h0) -
+                tf.einsum("bi,bj->bij", expected_v, expected_h))
+            bv_gradients_batch = (v - expected_v)
+            bh_gradients_batch = (expected_h0 - expected_h)
 
             # Average batch dimension
             W_gradient = tf.math.reduce_mean(W_gradients_batch, axis=0)

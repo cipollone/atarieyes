@@ -16,7 +16,7 @@ def main():
         log_frequency=20,
         save_frequency=200,
         batch_size=50,
-        learning_rate=1e-2,
+        learning_rate=2e-3,
         decay_steps=100,
     )
     agent_defaults = dict(
