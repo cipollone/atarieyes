@@ -303,9 +303,9 @@ class BinaryRBM(Model):
             self._batch_size = batch_size
             self._n_visible = n_visible
             self._n_hidden = n_hidden
-            self._l2_const = 0.05
-            self._sparsity_const = 0.2
-            self._h_distribution_target = 0.0
+            self._l2_const = 0.1
+            self._sparsity_const = 0.0
+            self._h_distribution_target = 0.1
             self._h_ema_decay = 0.99
 
             # Define parameters
@@ -444,14 +444,14 @@ class BinaryRBM(Model):
             """
 
             # Init Gibbs sampling
-            gibbs_sweeps = 1  # k
+            gibbs_sweeps = 3  # k
             sampled_v = v
-            expected_h0 = self.expected_h(sampled_v)
-            expected_h = expected_h0
-            sampled_h0 = self.sample_h(sampled_v, expected_h=expected_h)
-            sampled_h = sampled_h0
 
             # Sampling
+            expected_h = expected_h0 = self.expected_h(sampled_v)
+            sampled_h = sampled_h0 = self.sample_h(
+                sampled_v, expected_h=expected_h)
+
             for i in range(gibbs_sweeps):
                 expected_v = self.expected_v(sampled_h)
                 sampled_v = self.sample_v(sampled_h, expected_v=expected_v)
@@ -539,7 +539,7 @@ class LocalFluent(Model):
     """
     # TODO: n_hidden and region should be parametric. How?
 
-    def __init__(self, env_name, region="green_bar"):
+    def __init__(self, env_name, region="blue_right"):
         """Initialize.
 
         :param env_name: a gym environment name.

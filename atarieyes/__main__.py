@@ -17,7 +17,7 @@ def main():
         save_frequency=200,
         batch_size=50,
         learning_rate=1e-3,
-        decay_steps=100,
+        decay_steps=50,
     )
     agent_defaults = dict(
         memory_limit=1000000,
