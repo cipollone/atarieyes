@@ -562,7 +562,7 @@ class LocalFluent(Model):
         n_pixels = self._region_shape.num_elements()
 
         # RBM block
-        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=50)
+        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=100)
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
