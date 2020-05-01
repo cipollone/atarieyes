@@ -147,7 +147,8 @@ class Trainer:
         self.logger.save_histogram(step, histograms)
 
         # Transform tensors to scalars for nice logs
-        metrics = {name: tensor.numpy() for name, tensor in metrics.items()}
+        metrics = {name: var.numpy() if isinstance(var, tf.Tensor) else var
+            for name, var in metrics.items()}
 
         return metrics
 

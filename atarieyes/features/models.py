@@ -210,7 +210,7 @@ class BinaryRBM(Model):
             inputs=inputs, outputs=outputs, name="BinaryRBM")
 
         # Let keras register the variables
-        model._variables = self.layers.trainable_variables
+        model._saved_layers = self.layers
         assert model.trainable_variables == self.layers.trainable_variables
 
         # Save
@@ -230,6 +230,7 @@ class BinaryRBM(Model):
                 tensors["expected_h"],
                 tensors["expected_v"],
                 inputs,
+                tensors["h_activations_ema"],
             ],
             loss=None,
             metrics=dict(
@@ -237,6 +238,7 @@ class BinaryRBM(Model):
                 W_loss_gradient=tensors["W_loss_gradient_size"],
                 W_l2_gradient=tensors["W_l2_gradient_size"],
                 reconstruction_error=tensors["reconstruction_error"],
+                sparsity_gradient_size=tensors["sparsity_gradient_size"],
             ),
             gradients=gradients)
         return ret
@@ -270,6 +272,7 @@ class BinaryRBM(Model):
             "weigths/bh": self.layers._bh.value(),
             "outputs/expected_h": outputs[0],
             "outputs/expected_v": outputs[1],
+            "outputs/h_activations_ema": outputs[3],
         }
 
         return tensors
@@ -300,18 +303,31 @@ class BinaryRBM(Model):
             self._batch_size = batch_size
             self._n_visible = n_visible
             self._n_hidden = n_hidden
-            self._l2_const = 0.01
+            self._l2_const = 0.05
+            self._sparsity_const = 0.2
+            self._h_distribution_target = 0.0
+            self._h_ema_decay = 0.99
 
             # Define parameters
             self._W = self.add_weight(
                 name="W", shape=(n_visible, n_hidden),
-                dtype=tf.float32, trainable=True)
+                dtype=tf.float32, trainable=True,
+                initializer=tf.keras.initializers.TruncatedNormal(0, 0.01))
             self._bv = self.add_weight(
                 name="bv", shape=(n_visible,),
                 dtype=tf.float32, trainable=True, initializer="zeros")
             self._bh = self.add_weight(
                 name="bh", shape=(n_hidden,),
                 dtype=tf.float32, trainable=True, initializer="zeros")
+
+            # Activation of hidden units (used for sparsity promoting)
+            self._h_distribution = tf.Variable(
+                initial_value=tf.constant(
+                    self._h_distribution_target,
+                    dtype=tf.float32, shape=[n_hidden]
+                ),
+                trainable=False, name="h_activations_ema",
+            )
 
             # Buffer TODO: use for persistent CD.
             #self._saved_v = tf.Variable
@@ -428,25 +444,26 @@ class BinaryRBM(Model):
             """
 
             # Init Gibbs sampling
-            gibbs_sweeps = 3  # k = 3
+            gibbs_sweeps = 1  # k
             sampled_v = v
             expected_h0 = self.expected_h(sampled_v)
             expected_h = expected_h0
+            sampled_h0 = self.sample_h(sampled_v, expected_h=expected_h)
+            sampled_h = sampled_h0
 
             # Sampling
             for i in range(gibbs_sweeps):
-                sampled_h = self.sample_h(sampled_v, expected_h=expected_h)
                 expected_v = self.expected_v(sampled_h)
                 sampled_v = self.sample_v(sampled_h, expected_v=expected_v)
-                if i < gibbs_sweeps - 1:
-                    expected_h = self.expected_h(sampled_v)
+                expected_h = self.expected_h(sampled_v)
+                sampled_h = self.sample_h(sampled_v, expected_h=expected_h)
 
             # CD approximation
             W_gradients_batch = (
-                tf.einsum("bi,bj->bij", v, expected_h0) -
+                tf.einsum("bi,bj->bij", v, sampled_h0) -
                 tf.einsum("bi,bj->bij", expected_v, expected_h))
             bv_gradients_batch = (v - expected_v)
-            bh_gradients_batch = (expected_h0 - expected_h)
+            bh_gradients_batch = (sampled_h0 - expected_h)
 
             # Average batch dimension
             W_gradient = tf.math.reduce_mean(W_gradients_batch, axis=0)
@@ -463,6 +480,16 @@ class BinaryRBM(Model):
             W_l2_gradient = self._l2_const * self._W
             W_gradient += W_l2_gradient
 
+            # Regularization on activations (like a sparsity promoting loss)
+            h_activations = tf.reduce_mean(sampled_h, axis=0)
+            self._h_distribution.assign_sub(
+                (1-self._h_ema_decay) * (self._h_distribution - h_activations))
+            h_activations = self._h_distribution.value()
+            sparsity_gradient = self._sparsity_const * (
+                h_activations - self._h_distribution_target)
+            W_gradient += sparsity_gradient
+            bh_gradient += sparsity_gradient
+            
             # Collect and rename
             gradients = dict(
                 W=tf.identity(W_gradient, name="W_gradient"),
@@ -485,6 +512,8 @@ class BinaryRBM(Model):
                 tf.math.abs(W_l2_gradient))
             reconstruction_error = tf.reduce_mean(
                 tf.math.abs(v - expected_v))
+            sparsity_gradient_size = tf.math.reduce_max(
+                tf.math.abs(sparsity_gradient))
 
             # Ret
             tensors = dict(
@@ -493,6 +522,8 @@ class BinaryRBM(Model):
                 W_loss_gradient_size=W_loss_gradient_size,
                 W_l2_gradient_size=W_l2_gradient_size,
                 reconstruction_error=reconstruction_error,
+                h_activations_ema=h_activations,
+                sparsity_gradient_size=sparsity_gradient_size,
             )
 
             return gradients_vector, tensors
@@ -533,7 +564,7 @@ class LocalFluent(Model):
         n_pixels = self._region_shape.num_elements()
 
         # RBM block
-        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=30)
+        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=50)
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
@@ -545,7 +576,7 @@ class LocalFluent(Model):
             inputs=inputs, outputs=outputs, name="LocalFluentModel")
 
         # Let keras register the variables
-        model._variables = self.rbm.keras.trainable_variables
+        model._saved_layers = self.rbm.keras
         assert model.trainable_variables == self.rbm.keras.trainable_variables
 
         # Save
