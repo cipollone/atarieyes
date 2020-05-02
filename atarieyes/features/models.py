@@ -445,9 +445,12 @@ class BinaryRBM(Model):
 
             # Model Markov chain
             expected_model_h = self.expected_h(self._saved_v)
-            sampled_model_h = self.sample_h(self._saved_v, expected_h=expected_model_h)
+            sampled_model_h = self.sample_h(
+                self._saved_v, expected_h=expected_model_h)
+
             expected_model_v = self.expected_v(sampled_model_h)
-            sampled_model_v = self.sample_v(sampled_model_h, expected_v=expected_model_v)
+            sampled_model_v = self.sample_v(
+                sampled_model_h, expected_v=expected_model_v)
 
             self._saved_v.assign(sampled_model_v)
 
@@ -487,7 +490,7 @@ class BinaryRBM(Model):
                 h_activations - self._h_distribution_target)
             W_gradient += sparsity_gradient
             bh_gradient += sparsity_gradient
-            
+
             # Collect and rename
             gradients = dict(
                 W=tf.identity(W_gradient, name="W_gradient"),
@@ -535,13 +538,15 @@ class LocalFluent(Model):
     can be computed from just a small portion of the image.
     This model is composed by a RBM (and some other parts that will be added).
     """
-    # TODO: n_hidden and region should be parametric. How?
 
-    def __init__(self, env_name, region="blue_right"):
+    def __init__(self, env_name, region, n_hidden, resize_pixels=500):
         """Initialize.
 
         :param env_name: a gym environment name.
         :param region: name of the selected region.
+        :param n_hidden: number of hidden/output binary units.
+        :param resize_pixels: the input region is resized to have less than
+            this number of pixels.
         """
 
         # Store
@@ -552,7 +557,7 @@ class LocalFluent(Model):
         # Preprocessing
         self.preprocessing = layers.LocalFeaturePreprocessing(
             env_name=env_name, region=region,
-            threshold=0.2, max_pixels=500,
+            threshold=0.2, max_pixels=resize_pixels,
         )
         self.flatten = tf.keras.layers.Flatten()
 
@@ -562,7 +567,7 @@ class LocalFluent(Model):
         n_pixels = self._region_shape.num_elements()
 
         # RBM block
-        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=100)
+        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=n_hidden)
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)

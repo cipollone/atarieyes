@@ -8,7 +8,11 @@ Agent:
 
 Features:
 	Todo next:
-		- Get a good training
+		- Have I just found a bug on batch size? Can I avoid to pass batch?
+		- Clean code: move parameters in __main__.
+			Also update __main__ defaults with last successful run.
+		- Retrain
+		- Merge to develop and retrain
 	Todo later/maybe:
 
 Done:

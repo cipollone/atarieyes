@@ -18,6 +18,7 @@ def main():
         batch_size=50,
         learning_rate=1e-3,
         decay_steps=50,
+        n_hidden=100,
     )
     agent_defaults = dict(
         memory_limit=1000000,
@@ -194,8 +195,12 @@ def main():
         "--decay-steps", type=int, default=features_defaults["decay_steps"],
         help="Learning rate decays of 5% after this number of steps.")
     features_train.add_argument(
-        "--const-rate", action="store_true",
-        help="Disable decaying learning rate.")
+        "--decay-rate", action="store_true", dest="decay_rate",
+        help="Use a decaying learning rate.")
+    features_train.add_argument(
+        "--n-hidden", type=int, dest="n_hidden",
+        default=features_defaults["n_hidden"],
+        help="Number of hidden units (if applicable)")
 
     # Feature selection op
     feature_select = features_op.add_parser(

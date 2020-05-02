@@ -26,7 +26,7 @@ class Trainer:
         self.cont = bool(args.cont)
         self.init_step = args.cont if self.cont else 0
         self.learning_rate = args.learning_rate
-        self.const_rate = args.const_rate
+        self.decay_rate = args.decay_rate
 
         # Dirs
         model_path, log_path = tools.prepare_directories(
@@ -43,10 +43,11 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.LocalFluent(args.env)
+        self.model = models.LocalFluent(
+            args.env, region="blue_right", n_hidden=args.n_hidden)
 
         # Optimization
-        if not self.const_rate:
+        if self.decay_rate:
             self.learning_rate = tf.optimizers.schedules.ExponentialDecay(
                 args.learning_rate, decay_steps=args.decay_steps,
                 decay_rate=0.95)
@@ -134,8 +135,8 @@ class Trainer:
             for name, value in outputs["metrics"].items()}
         if outputs["loss"] is not None:
             metrics["loss"] = outputs["loss"]
-        metrics["learning_rate"] = self.learning_rate if self.const_rate else \
-            self.learning_rate(step)
+        metrics["learning_rate"] = self.learning_rate if not self.decay_rate \
+            else self.learning_rate(step)
         self.logger.save_scalars(step, metrics)
 
         # Log images
@@ -147,8 +148,10 @@ class Trainer:
         self.logger.save_histogram(step, histograms)
 
         # Transform tensors to scalars for nice logs
-        metrics = {name: var.numpy() if isinstance(var, tf.Tensor) else var
-            for name, var in metrics.items()}
+        metrics = {
+            name: var.numpy() if isinstance(var, tf.Tensor) else var
+            for name, var in metrics.items()
+        }
 
         return metrics
 
@@ -157,6 +160,7 @@ class Trainer:
         """Efficient graph call for Model.compute_all."""
 
         return self.model.compute_all(inputs)
+
 
 class CheckpointSaver:
     """Save weights and restore."""
