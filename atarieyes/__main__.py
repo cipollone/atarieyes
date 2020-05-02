@@ -19,6 +19,8 @@ def main():
         learning_rate=1e-3,
         decay_steps=50,
         n_hidden=100,
+        l2_const=0.1,
+        sparsity_const=0.0,
     )
     agent_defaults = dict(
         memory_limit=1000000,
@@ -201,6 +203,14 @@ def main():
         "--n-hidden", type=int, dest="n_hidden",
         default=features_defaults["n_hidden"],
         help="Number of hidden units (if applicable)")
+    features_train.add_argument(
+        "--l2-const", type=float, dest="l2_const",
+        default=features_defaults["l2_const"],
+        help="Scale factor of the L2 loss")
+    features_train.add_argument(
+        "--sparsity-const", type=float, dest="sparsity_const",
+        default=features_defaults["sparsity_const"],
+        help="Scale factor of the sparsity promoting loss")
 
     # Feature selection op
     feature_select = features_op.add_parser(

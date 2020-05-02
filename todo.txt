@@ -8,8 +8,6 @@ Agent:
 
 Features:
 	Todo next:
-		- Clean code: move parameters in __main__.
-			Also update __main__ defaults with last successful run.
 		- Retrain
 		- Redefine forward pass as a deterministic ML estimate
 		- Merge to develop and retrain

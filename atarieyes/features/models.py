@@ -185,12 +185,12 @@ class BinaryRBM(Model):
     Assuming every tensor is a float.
     """
 
-    def __init__(self, n_visible, n_hidden, batch_size):
+    def __init__(
+            self, *, n_visible, n_hidden, batch_size, l2_const, sparsity_const,
+        ):
         """Initialize.
 
-        :param n_visible: number of visible units.
-        :param n_hidden: number of hidden units.
-        :param batch_size: fixed size of the batch.
+        See BinaryRBM.BernoulliPair for Doc.
         """
 
         # Store
@@ -200,7 +200,9 @@ class BinaryRBM(Model):
 
         # Two layers
         self.layers = self.BernoulliPair(
-            n_visible=n_visible, n_hidden=n_hidden, batch_size=batch_size)
+            n_visible=n_visible, n_hidden=n_hidden, batch_size=batch_size,
+            l2_const=l2_const, sparsity_const=sparsity_const
+        )
 
         # Keras model
         inputs = tf.keras.Input(shape=[n_visible], dtype=tf.float32)
@@ -286,12 +288,17 @@ class BinaryRBM(Model):
         units.
         """
 
-        def __init__(self, *, n_visible, n_hidden, batch_size):
+        def __init__(
+            self, *, n_visible, n_hidden, batch_size, l2_const, sparsity_const,
+        ):
             """Initialize.
 
             :param n_visible: number of visible units.
             :param n_hidden: number of hidden units.
             :param batch_size: fixed size of the batch.
+            :param l2_const: scale factor of the L2 loss on W.
+            :param sparsity_const: scale factor of the sparsity promoting loss.
+                Target distribution is 10% activation for all hidden units.
             """
 
             # Super
@@ -299,14 +306,16 @@ class BinaryRBM(Model):
 
             # Save options
             self.layer_options = dict(
-                n_visible=n_visible, n_hidden=n_hidden, batch_size=batch_size)
+                n_visible=n_visible, n_hidden=n_hidden, batch_size=batch_size,
+                l2_const=l2_const, sparsity_const=sparsity_const
+            )
 
             # Constants
             self._batch_size = batch_size
             self._n_visible = n_visible
             self._n_hidden = n_hidden
-            self._l2_const = 0.1
-            self._sparsity_const = 0.0
+            self._l2_const = l2_const
+            self._sparsity_const = sparsity_const
             self._h_distribution_target = 0.1
             self._h_ema_decay = 0.99
 
@@ -520,7 +529,7 @@ class BinaryRBM(Model):
 
             # Ret
             tensors = dict(
-                expected_h=expected_data_v,
+                expected_h=expected_data_h,
                 expected_v=expected_data_v,
                 W_loss_gradient_size=W_loss_gradient_size,
                 W_l2_gradient_size=W_l2_gradient_size,
@@ -542,7 +551,8 @@ class LocalFluent(Model):
     """
 
     def __init__(
-        self, env_name, region, n_hidden, batch_size, resize_pixels=500
+        self, *, env_name, region, n_hidden, batch_size, l2_const,
+        sparsity_const, resize_pixels=500,
     ):
         """Initialize.
 
@@ -550,6 +560,9 @@ class LocalFluent(Model):
         :param region: name of the selected region.
         :param n_hidden: number of hidden/output binary units.
         :param batch_size: fixed size of the batch.
+        :param l2_const: scale factor of the L2 loss on W.
+        :param sparsity_const: scale factor of the sparsity promoting loss.
+            Target distribution is 10% activation for all hidden units.
         :param resize_pixels: the input region is resized to have less than
             this number of pixels.
         """
@@ -573,7 +586,9 @@ class LocalFluent(Model):
 
         # RBM block
         self.rbm = BinaryRBM(
-            n_visible=n_pixels, n_hidden=n_hidden, batch_size=batch_size)
+            n_visible=n_pixels, n_hidden=n_hidden, batch_size=batch_size,
+            l2_const=l2_const, sparsity_const=sparsity_const,
+        )
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
