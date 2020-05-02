@@ -329,8 +329,10 @@ class BinaryRBM(Model):
                 trainable=False, name="h_activations_ema",
             )
 
-            # Buffer TODO: use for persistent CD.
-            #self._saved_v = tf.Variable
+            # Buffer of sampled units (persistent CD)
+            self._saved_v = tf.Variable(
+                np.ones((batch_size, n_visible), dtype=np.float32),
+                trainable=False, name="saved_v_sample")
 
             # Transform functions to layers (optional, for a nice graph)
             self.expected_h = make_layer("Expected_h", self.expected_h)()
@@ -434,8 +436,6 @@ class BinaryRBM(Model):
         def compute_gradients(self, v):
             """Compute the gradient for the current batch.
 
-            The method is Contrastive Divergence, CD-k.
-
             :param v: batch of observed visible vectors.
                 Binary float values of shape (batch, n_visible).
             :return: (gradients, tensors). Gradients is a list, one for
@@ -443,27 +443,25 @@ class BinaryRBM(Model):
                 of computed values.
             """
 
-            # Init Gibbs sampling
-            gibbs_sweeps = 3  # k
-            sampled_v = v
+            # Model Markov chain
+            expected_model_h = self.expected_h(self._saved_v)
+            sampled_model_h = self.sample_h(self._saved_v, expected_h=expected_model_h)
+            expected_model_v = self.expected_v(sampled_model_h)
+            sampled_model_v = self.sample_v(sampled_model_h, expected_v=expected_model_v)
 
-            # Sampling
-            expected_h = expected_h0 = self.expected_h(sampled_v)
-            sampled_h = sampled_h0 = self.sample_h(
-                sampled_v, expected_h=expected_h)
+            self._saved_v.assign(sampled_model_v)
 
-            for i in range(gibbs_sweeps):
-                expected_v = self.expected_v(sampled_h)
-                sampled_v = self.sample_v(sampled_h, expected_v=expected_v)
-                expected_h = self.expected_h(sampled_v)
-                sampled_h = self.sample_h(sampled_v, expected_h=expected_h)
+            # Data samples
+            expected_data_h = self.expected_h(v)
+            sampled_data_h = self.sample_h(v, expected_h=expected_data_h)
+            expected_data_v = self.expected_v(sampled_data_h)
 
             # CD approximation
             W_gradients_batch = (
-                tf.einsum("bi,bj->bij", v, sampled_h0) -
-                tf.einsum("bi,bj->bij", expected_v, expected_h))
-            bv_gradients_batch = (v - expected_v)
-            bh_gradients_batch = (sampled_h0 - expected_h)
+                tf.einsum("bi,bj->bij", v, sampled_data_h) -
+                tf.einsum("bi,bj->bij", expected_model_v, expected_model_h))
+            bv_gradients_batch = (v - expected_model_v)
+            bh_gradients_batch = (sampled_data_h - expected_model_h)
 
             # Average batch dimension
             W_gradient = tf.math.reduce_mean(W_gradients_batch, axis=0)
@@ -481,7 +479,7 @@ class BinaryRBM(Model):
             W_gradient += W_l2_gradient
 
             # Regularization on activations (like a sparsity promoting loss)
-            h_activations = tf.reduce_mean(sampled_h, axis=0)
+            h_activations = tf.reduce_mean(sampled_model_h, axis=0)
             self._h_distribution.assign_sub(
                 (1-self._h_ema_decay) * (self._h_distribution - h_activations))
             h_activations = self._h_distribution.value()
@@ -511,14 +509,14 @@ class BinaryRBM(Model):
             W_l2_gradient_size = tf.math.reduce_max(
                 tf.math.abs(W_l2_gradient))
             reconstruction_error = tf.reduce_mean(
-                tf.math.abs(v - expected_v))
+                tf.math.abs(v - expected_data_v))
             sparsity_gradient_size = tf.math.reduce_max(
                 tf.math.abs(sparsity_gradient))
 
             # Ret
             tensors = dict(
-                expected_h=expected_h,
-                expected_v=expected_v,
+                expected_h=expected_data_v,
+                expected_v=expected_data_v,
                 W_loss_gradient_size=W_loss_gradient_size,
                 W_l2_gradient_size=W_l2_gradient_size,
                 reconstruction_error=reconstruction_error,
@@ -564,7 +562,7 @@ class LocalFluent(Model):
         n_pixels = self._region_shape.num_elements()
 
         # RBM block
-        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=50)
+        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=100)
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
