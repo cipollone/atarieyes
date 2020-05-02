@@ -23,7 +23,7 @@ apt-get -y upgrade
 # Project dependencies
 
 # Basics
-RUN apt-get -y install python3-pip bash-completion git 
+RUN apt-get -y install python3-pip bash-completion git tmux
 # Opencv
 RUN apt-get -y install libsm6 libxrender-dev
 

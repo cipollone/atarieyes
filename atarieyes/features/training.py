@@ -1,12 +1,14 @@
 """This module allows to train a feature extractor."""
 
 import os
+import json
 import gym
 import numpy as np
 import tensorflow as tf
 
 from atarieyes.features import models
 from atarieyes import tools
+from atarieyes.streaming import AtariFramesReceiver
 
 
 class Trainer:
@@ -19,8 +21,15 @@ class Trainer:
         """
 
         # Init
-        self.log_frequency = args.logs
-        self.cont = args.cont
+        self.log_frequency = args.log_frequency
+        self.save_frequency = args.save_frequency
+        self.cont = bool(args.cont)
+        self.init_step = args.cont if self.cont else 0
+        self.learning_rate = args.learning_rate
+        self.decay_rate = args.decay_rate
+        self.batch_size = args.batch_size
+
+        # Dirs
         model_path, log_path = tools.prepare_directories(
             "features", args.env, resuming=self.cont, args=args)
 
@@ -30,35 +39,40 @@ class Trainer:
 
         # Dataset
         dataset = make_dataset(
-            lambda: random_play(args.env, args.render),
-            args.batch, self.frame_shape)
+            lambda: agent_player(args.env, args.stream),
+            args.batch_size, self.frame_shape)
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.FrameAutoencoder(
-            frame_shape=self.frame_shape,
-            env_name=self.env.spec.id
+        self.model = models.LocalFluent(
+            env_name=args.env, region="blue_right", n_hidden=args.n_hidden,
+            batch_size=args.batch_size, l2_const=args.l2_const,
+            sparsity_const=args.sparsity_const,
         )
 
         # Optimization
+        if self.decay_rate:
+            self.learning_rate = tf.optimizers.schedules.ExponentialDecay(
+                args.learning_rate, decay_steps=args.decay_steps,
+                decay_rate=0.95)
+        self.optimizer = tf.optimizers.Adam(self.learning_rate)
         self.params = self.model.keras.trainable_variables
-        self.optimizer = tf.optimizers.Adam(args.rate)
 
         # Tools
         self.saver = CheckpointSaver(self.model.keras, model_path)
-        self.logger = TensorBoardLogger(self.model.keras, log_path)
+        self.logger = TensorBoardLogger(self.model, log_path)
 
     def train(self):
         """Train."""
 
+        step = self.init_step
+
         # New run
         if not self.cont:
-            self.logger.save_graph(self.frame_shape)
-            step = 0
+            self.logger.save_graph((self.batch_size, *self.frame_shape))
         # Restore
         else:
-            step = self.saver.load()
-            print("> Weights restored.")
+            self.saver.load(step)
 
             # Initial valuation
             self.valuate(step)
@@ -72,11 +86,12 @@ class Trainer:
             outputs = self.train_step()
 
             # Logs and savings
-            if step % self.log_frequency == 0:
-
+            relative_step = step - self.init_step
+            if relative_step % self.log_frequency == 0:
                 metrics = self.valuate(step, outputs)
-                self.saver.save(step, -metrics["loss"])
                 print("Step ", step, ", ", metrics, sep="", end="          \r")
+            if relative_step % self.save_frequency == 0 and relative_step > 0:
+                self.saver.save(step)
 
             step += 1
 
@@ -87,12 +102,18 @@ class Trainer:
         :return: outputs of the model.
         """
 
-        # Forward
-        with tf.GradientTape() as tape:
+        # Custom gradient
+        if self.model.computed_gradient:
             outputs = self.model.compute_all(next(self.dataset_it))
+            gradients = outputs["gradients"]
 
-        # Compute and apply grandient
-        gradients = tape.gradient(outputs["loss"], self.params)
+        # Compute
+        else:
+            with tf.GradientTape() as tape:
+                outputs = self.model.compute_all(next(self.dataset_it))
+            gradients = tape.gradient(outputs["loss"], self.params)
+
+        # Apply
         self.optimizer.apply_gradients(zip(gradients, self.params))
 
         return outputs
@@ -110,22 +131,45 @@ class Trainer:
         # Compute if not given
         if not outputs:
             frames = next(self.dataset_it)
-            outputs = self.model.compute_all(frames)
+            outputs = self._model_compute_all(frames)
 
         # Log scalars
-        metrics = dict(outputs["metrics"])
-        metrics["loss"] = outputs["loss"]
+        metrics = {
+            "metrics/" + name: value
+            for name, value in outputs["metrics"].items()}
+        if outputs["loss"] is not None:
+            metrics["loss"] = outputs["loss"]
+        metrics["learning_rate"] = self.learning_rate if not self.decay_rate \
+            else self.learning_rate(step)
         self.logger.save_scalars(step, metrics)
 
         # Log images
-        images = self.model.output_images(outputs["outputs"])
+        images = self.model.images(outputs["outputs"])
         self.logger.save_images(step, images)
 
+        # Log histograms
+        histograms = self.model.histograms(outputs["outputs"])
+        self.logger.save_histogram(step, histograms)
+
+        # Transform tensors to scalars for nice logs
+        metrics = {
+            name: var.numpy() if isinstance(var, tf.Tensor) else var
+            for name, var in metrics.items()
+        }
+
         return metrics
+
+    @tf.function
+    def _model_compute_all(self, inputs):
+        """Efficient graph call for Model.compute_all."""
+
+        return self.model.compute_all(inputs)
 
 
 class CheckpointSaver:
     """Save weights and restore."""
+
+    save_format = "h5"
 
     def __init__(self, model, path):
         """Initialize.
@@ -134,10 +178,33 @@ class CheckpointSaver:
         :param path: directory where checkpoints should be saved.
         """
 
-        self.save_path = os.path.join(path, model.name)
-        self.counters_path = os.path.join(path, "counters.txt")
+        # Store
         self.model = model
         self.score = float("-inf")
+
+        self.counters_file = os.path.join(path, "counters.json")
+        self.step_checkpoints = os.path.join(
+            path, model.name + "_weights_{step}." + self.save_format)
+
+    def _update_counters(self, filepath, step):
+        """Updates the file of counters with a new entry.
+
+        :param filepath: checkpoint that is being saved
+        :param step: current global step
+        """
+
+        counters = {}
+
+        # Load
+        if os.path.exists(self.counters_file):
+            with open(self.counters_file) as f:
+                counters = json.load(f)
+
+        counters[filepath] = dict(step=step)
+
+        # Save
+        with open(self.counters_file, "w") as f:
+            json.dump(counters, f, indent=4)
 
     def save(self, step, score=None):
         """Save.
@@ -156,29 +223,24 @@ class CheckpointSaver:
                 self.score = score
 
         # Save
+        filepath = self.step_checkpoints.format(step=step)
         self.model.save_weights(
-            self.save_path, overwrite=True, save_format="tf")
-        with open(self.counters_path, "w") as f:
-            f.write("step: " + str(step))
+            filepath, overwrite=True, save_format=self.save_format)
+        self._update_counters(filepath=filepath, step=step)
+
         return True
 
-    def load(self):
-        """Restore weights from the previous checkpoint.
+    def load(self, step):
+        """Load the weights from a checkpoint.
 
-        NOTE: optimizer state is not restored.
-
-        :return: the step of the saved weights
+        :param step: specify which checkpoint to load
         """
 
+        filepath = self.step_checkpoints.format(step=step)
+
         # Restore
-        self.model.load_weights(self.save_path)
-
-        # Step
-        with open(self.counters_path) as f:
-            counters = f.read()
-        step = int(counters.split(":")[1])
-
-        return step
+        self.model.load_weights(filepath)
+        print("> Loaded:", filepath)
 
 
 class TensorBoardLogger:
@@ -187,7 +249,7 @@ class TensorBoardLogger:
     def __init__(self, model, path):
         """Initialize.
 
-        :param model: tensorflow model that should be saved.
+        :param model: a features.Model that should be saved.
         :param path: directory where logs should be saved.
         """
 
@@ -196,27 +258,27 @@ class TensorBoardLogger:
         self.summary_writer = tf.summary.create_file_writer(path)
 
     def save_graph(self, input_shape):
-        """Save the graph of the model.
+        """Visualize the graph of the model in TensorBoard.
 
         :param input_shape: the shape of the input tensor of the model
-            (without batch).
+            (with batch).
         """
 
         # Forward pass
         @tf.function
         def tracing_model_ops(inputs):
-            return self.model(inputs)
+            return self.model.compute_all(inputs)
 
-        inputs = np.zeros((1, *input_shape), dtype=np.uint8)
+        inputs = np.zeros(input_shape, dtype=np.uint8)
 
         # Now trace
         tf.summary.trace_on(graph=True)
         tracing_model_ops(inputs)
         with self.summary_writer.as_default():
-            tf.summary.trace_export(self.model.name, step=0)
+            tf.summary.trace_export(self.model.__class__.__name__, step=0)
 
     def save_scalars(self, step, metrics):
-        """Save scalars.
+        """Visualize scalar metrics in TensorBoard.
 
         :param step: the step number
         :param metrics: a dict of (name: value)
@@ -228,7 +290,7 @@ class TensorBoardLogger:
                 tf.summary.scalar(name, value, step=step)
 
     def save_images(self, step, images):
-        """Save images in TensorBoard.
+        """Visualize images in TensorBoard.
 
         :param step: the step number
         :param images: a dict of batches of images. Only the first
@@ -242,6 +304,18 @@ class TensorBoardLogger:
                 image = tf.expand_dims(image, axis=0)
                 tf.summary.image(name, image, step)
 
+    def save_histogram(self, step, tensors):
+        """Visualize tensors as histograms.
+
+        :param step: the step number
+        :param tensors: a dict of (name: tensor)
+        """
+
+        # Save
+        with self.summary_writer.as_default():
+            for name, tensor in tensors.items():
+                tf.summary.histogram(name, tensor, step)
+
 
 def make_dataset(game_player, batch, frame_shape):
     """Create a TF Dataset from frames of a game.
@@ -249,9 +323,9 @@ def make_dataset(game_player, batch, frame_shape):
     Creates a TF Dataset which contains batches of frames.
 
     :param game_player: A callable which creates an interator. The interator
-        must return Gym env.step outputs.
+        must return frames of the game.
     :param batch: Batch size.
-    :param frame_shape: Frame input shape.
+    :param frame_shape: Frame shape retuned by game_player.
     :return: Tensorflow Dataset.
     """
 
@@ -259,24 +333,25 @@ def make_dataset(game_player, batch, frame_shape):
     def frame_iterate():
         env_step = game_player()
         while True:
-            yield next(env_step)[0]
+            yield next(env_step)
 
     # Dataset
     dataset = tf.data.Dataset.from_generator(
         frame_iterate, output_types=tf.uint8, output_shapes=frame_shape)
 
+    dataset = dataset.shuffle(5000)
     dataset = dataset.batch(batch)
     dataset = dataset.prefetch(1)
 
     return dataset
 
 
-def random_play(env_name, render=False):
+def random_player(env_name, render=False):
     """Play randomly a game.
 
     :param env_name: Gym Environment name
     :param render: When true, the environment is rendered.
-    :return: a interator of Gym env.step return arguments.
+    :return: an interator of frames.
     """
 
     # Make
@@ -305,9 +380,33 @@ def random_play(env_name, render=False):
             # Result
             if render:
                 env.render()
-            yield observation, reward, done, None
+            yield observation
 
         n_game += 1
 
     # Leave
     env.close()
+
+
+def agent_player(env_name, ip="localhost"):
+    """Returns frame from a trained agent.
+
+    This requires a running instance of `atarieyes agent play`.
+
+    :param env_name: name of an Atari Gym environment
+    :param ip: machine where the agent is playing
+    :return: a generator of frames
+    """
+
+    print("> Waiting for a stream of frames from:", ip)
+
+    # Set up a connection
+    receiver = AtariFramesReceiver(env_name, ip)
+
+    # Collect
+    try:
+        while True:
+            yield receiver.receive(wait=True)
+
+    except ConnectionAbortedError:
+        raise StopIteration
