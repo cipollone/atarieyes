@@ -185,20 +185,22 @@ class BinaryRBM(Model):
     Assuming every tensor is a float.
     """
 
-    def __init__(self, n_visible, n_hidden):
+    def __init__(self, n_visible, n_hidden, batch_size):
         """Initialize.
 
         :param n_visible: number of visible units.
         :param n_hidden: number of hidden units.
+        :param batch_size: fixed size of the batch.
         """
 
         # Store
         self.n_visible = n_visible
         self.n_hidden = n_hidden
+        self.batch_size = batch_size
 
         # Two layers
         self.layers = self.BernoulliPair(
-            n_visible=n_visible, n_hidden=n_hidden)
+            n_visible=n_visible, n_hidden=n_hidden, batch_size=batch_size)
 
         # Keras model
         inputs = tf.keras.Input(shape=[n_visible], dtype=tf.float32)
@@ -284,7 +286,7 @@ class BinaryRBM(Model):
         units.
         """
 
-        def __init__(self, *, n_visible, n_hidden, batch_size=1):
+        def __init__(self, *, n_visible, n_hidden, batch_size):
             """Initialize.
 
             :param n_visible: number of visible units.
@@ -539,12 +541,15 @@ class LocalFluent(Model):
     This model is composed by a RBM (and some other parts that will be added).
     """
 
-    def __init__(self, env_name, region, n_hidden, resize_pixels=500):
+    def __init__(
+        self, env_name, region, n_hidden, batch_size, resize_pixels=500
+    ):
         """Initialize.
 
         :param env_name: a gym environment name.
         :param region: name of the selected region.
         :param n_hidden: number of hidden/output binary units.
+        :param batch_size: fixed size of the batch.
         :param resize_pixels: the input region is resized to have less than
             this number of pixels.
         """
@@ -567,7 +572,8 @@ class LocalFluent(Model):
         n_pixels = self._region_shape.num_elements()
 
         # RBM block
-        self.rbm = BinaryRBM(n_visible=n_pixels, n_hidden=n_hidden)
+        self.rbm = BinaryRBM(
+            n_visible=n_pixels, n_hidden=n_hidden, batch_size=batch_size)
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)

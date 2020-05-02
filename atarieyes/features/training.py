@@ -27,6 +27,7 @@ class Trainer:
         self.init_step = args.cont if self.cont else 0
         self.learning_rate = args.learning_rate
         self.decay_rate = args.decay_rate
+        self.batch_size = args.batch_size
 
         # Dirs
         model_path, log_path = tools.prepare_directories(
@@ -44,7 +45,9 @@ class Trainer:
 
         # Model
         self.model = models.LocalFluent(
-            args.env, region="blue_right", n_hidden=args.n_hidden)
+            args.env, region="blue_right", n_hidden=args.n_hidden,
+            batch_size=args.batch_size,
+        )
 
         # Optimization
         if self.decay_rate:
@@ -65,7 +68,7 @@ class Trainer:
 
         # New run
         if not self.cont:
-            self.logger.save_graph(self.frame_shape)
+            self.logger.save_graph((self.batch_size, *self.frame_shape))
         # Restore
         else:
             self.saver.load(step)
@@ -257,7 +260,7 @@ class TensorBoardLogger:
         """Visualize the graph of the model in TensorBoard.
 
         :param input_shape: the shape of the input tensor of the model
-            (without batch).
+            (with batch).
         """
 
         # Forward pass
@@ -265,7 +268,7 @@ class TensorBoardLogger:
         def tracing_model_ops(inputs):
             return self.model.compute_all(inputs)
 
-        inputs = np.zeros((1, *input_shape), dtype=np.uint8)
+        inputs = np.zeros(input_shape, dtype=np.uint8)
 
         # Now trace
         tf.summary.trace_on(graph=True)
