@@ -3,6 +3,7 @@
 import json
 import os
 import inspect
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
 
@@ -269,28 +270,35 @@ def scale_to(inputs, from_range, to_range):
     return out
 
 
-class CropToEnvBox(BaseLayer):
-    """Crop frames of a atari gym environment.
+class CropToEnv(BaseLayer):
+    """Crop frames of a Atari gym environments.
 
-    The purpose of this function is to focus on the important part of the frame
-    for each game. The box of each game can be specified with the selector.
+    The purpose of this function is to crop to the relevant part of the frame
+    for each game. The box of each game can be specified with the Selector
+    tool.
     """
 
-    def __init__(self, env_name, **kwargs):
+    def __init__(self, env_name, region="box", **kwargs):
         """Initialize.
 
         :param env_name: a gym environment name.
+        :param region: "box" is a large region for the relevant part of the
+            frame. Any other name is interpreted as a the identifier of
+            a local feature.
         :raises: ValueError: if unknown env.
         """
 
-        # Load boxes
+        # Load the selection
         env_json = os.path.join(selector.info_dir, env_name + ".json")
         if not os.path.exists(env_json):
             box = None
         else:
             with open(env_json) as f:
                 env_data = json.load(f)
-            box = env_data["box"]
+            if region == "box":
+                box = env_data["box"]
+            else:
+                box = env_data["regions"][region]
 
         # Check
         if not box:
@@ -308,6 +316,7 @@ class CropToEnvBox(BaseLayer):
         # Store
         self.layer_options = {
             "env_name": env_name,
+            "region": region,
         }
 
     def call(self, inputs):
@@ -324,8 +333,10 @@ class CropToEnvBox(BaseLayer):
 class ImagePreprocessing(BaseLayer):
     """Image preprocessing layer."""
 
-    def __init__(self, env_name, out_size, grayscale=False,
-            resize_method="bilinear", **kwargs):
+    def __init__(
+        self, env_name, out_size, grayscale=False, resize_method="bilinear",
+        **kwargs
+    ):
         """Initialize.
 
         :param env_name: a gym environment name.
@@ -337,15 +348,16 @@ class ImagePreprocessing(BaseLayer):
         # Super
         BaseLayer.__init__(self, **kwargs)
 
-        # Store
+        # Layer options
         self.layer_options = {
             "out_size": out_size,
             "env_name": env_name,
             "grayscale": grayscale,
             "resize_method": resize_method,
+            **kwargs,
         }
 
-        self.crop = CropToEnvBox(env_name)
+        self.crop = CropToEnv(env_name)
 
     def call(self, inputs):
         """Preprocess."""
@@ -364,8 +376,90 @@ class ImagePreprocessing(BaseLayer):
         inputs = scale_to(inputs, from_range=(0, 255), to_range=(-1, 1))
 
         # Square shape is easier to handle
-        inputs = tf.image.resize(inputs, size=self.layer_options["out_size"],
+        inputs = tf.image.resize(
+            inputs, size=self.layer_options["out_size"],
             method=self.layer_options["resize_method"])
+
+        return inputs
+
+
+class LocalFeaturePreprocessing(BaseLayer):
+    """Preprocessing for small local features.
+
+    A local feature is a small region of the frame that has some meaning.
+    This is the preprocessing for this tiny patches.
+    """
+
+    def __init__(
+        self, env_name, region, threshold=0.5, max_pixels=None, **kwargs
+    ):
+        """Initialize.
+
+        :param env_name: a gym environment name.
+        :param region: name of the selected region.
+        :param threshold: the output is a binary image. Pixels >= threshold
+            are white (value 1). Must be in [0, 1].
+        :param max_pixels: if set, the image patch is resized to a number
+            of pixels less than this limit.
+        """
+
+        # Super
+        BaseLayer.__init__(self, **kwargs)
+
+        # Layer options
+        self.layer_options = {
+            "env_name": env_name,
+            "region": region,
+            "threshold": threshold,
+            "max_pixels": max_pixels,
+            **kwargs,
+        }
+
+        # Save
+        self.crop = CropToEnv(env_name, region=region)
+        self._threshold = threshold
+        self._max_pixels = max_pixels
+
+    def build(self, input_shape):
+        """Late initializations."""
+
+        # Compute resize shape
+        if self._max_pixels:
+
+            # Fake input
+            inputs = np.zeros(input_shape, dtype=np.uint8)
+            inputs = self.crop(inputs)
+
+            # Scale
+            pixels = tf.reduce_prod(inputs.shape[1:3])
+            scale = tf.math.sqrt(self._max_pixels/pixels)
+            new_size = tf.cast(inputs.shape[1:3], tf.float64) * scale
+            self._new_size = tf.cast(new_size, tf.int32)
+
+        # Built
+        BaseLayer.build(self, input_shape)
+
+    def call(self, inputs):
+        """Preprocess."""
+
+        # Crop
+        inputs = self.crop(inputs)
+
+        # Grayscale
+        inputs = tf.image.rgb_to_grayscale(inputs)
+
+        # Scale
+        inputs = tf.cast(inputs, tf.float32)
+        inputs = scale_to(inputs, from_range=(0, 255), to_range=(0, 1))
+
+        # Resize?
+        if self._max_pixels:
+
+            inputs = tf.image.resize(
+                inputs, self._new_size, preserve_aspect_ratio=True)
+
+        # Black and white
+        inputs = tf.where(inputs >= self._threshold, 1.0, 0.0)
 
         return inputs
 

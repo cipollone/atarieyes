@@ -32,6 +32,7 @@ def selection_tool(args):
     image0 = cv.resize(image0, (f*w, f*h))
     image0 = np.flip(image0, 2)  # opencv uses BGR
     selections = []
+    selection_names = []
 
     # Select outer box
     print("> Select game region")
@@ -44,10 +45,14 @@ def selection_tool(args):
     # Select features
     print("> Select small local features")
     selection = [0, 0, 1, 1]
-    while selection[2] > 0 and selection[3] > 0:
+    while True:
         selection = cv.selectROI("frame", image0)
+
+        if not (selection[2] > 0 and selection[3] > 0):
+            break
         selections.append(selection)
-    selections.pop()
+        selection_names.append(input("> Name: "))
+    print("")
 
     # Scale down
     box = np.round(np.array(box) / f).astype(int).tolist()
@@ -61,7 +66,9 @@ def selection_tool(args):
         regions.append(
             [selection[0], selection[1], selection[0] + selection[2],
                 selection[1] + selection[3]])
-    data["regions"] = regions
+
+    data["regions"] = {
+        name: selection for name, selection in zip(selection_names, regions)}
 
     # Save
     env_file = os.path.join(info_dir, env.spec.id + ".json")

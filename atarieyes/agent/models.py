@@ -13,11 +13,11 @@ from PIL import Image
 import gym
 from tensorflow import keras
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Activation, Flatten, Conv2D, Permute
+from tensorflow.keras.layers import Dense, Flatten, Permute
 from rl.core import Processor
 
 from atarieyes.tools import ABCMeta2, AbstractAttribute
-from atarieyes.layers import CropToEnvBox, ConvBlock
+from atarieyes.layers import CropToEnv, ConvBlock
 
 
 class QAgentDef(metaclass=ABCMeta2):
@@ -53,7 +53,7 @@ class AtariAgent(QAgentDef):
         :param env_name: name of an Atari gym environment.
         :param training: boolean training flag.
         """
-        
+
         # Init
         env = gym.make(env_name)
         self.n_actions = env.action_space.n        # discrete in Atari
@@ -116,7 +116,7 @@ class AtariAgent(QAgentDef):
             self._life_lost = False
 
             self._resize_shape = resize_shape
-            self._cropper = CropToEnvBox(env_name)
+            self._cropper = CropToEnv(env_name)
 
         def process_step(self, observation, reward, done, info):
             """Processes an entire step.
