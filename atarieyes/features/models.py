@@ -186,8 +186,8 @@ class BinaryRBM(Model):
     """
 
     def __init__(
-            self, *, n_visible, n_hidden, batch_size, l2_const, sparsity_const,
-        ):
+        self, *, n_visible, n_hidden, batch_size, l2_const, sparsity_const,
+    ):
         """Initialize.
 
         See BinaryRBM.BernoulliPair for Doc.
@@ -250,17 +250,10 @@ class BinaryRBM(Model):
     def predict(self, inputs):
         """Make a prediction with the model.
 
-        An RBM has no real output. I define a prediction as the expected value
-        of the hidden layer.
-
-        :param inputs: one batch
-        :return output: the expected value of the hidden layer
+        See BernoulliPair.call().
         """
 
-        # Forward
-        output = self.layers.expected_h(inputs)
-
-        return output
+        return self.layers(inputs)
 
     def images(self, outputs):
         """Images to visualize."""
@@ -437,12 +430,16 @@ class BinaryRBM(Model):
             return tf.identity(free_energy, "free_energy")
 
         def call(self, inputs):
-            """I define a forward pass as computing the expected h.
+            """Definition of a forward pass.
 
-            See expected_h().
+            Compute the most probable hidden units given a batch of values for
+            the visible units. This function is deterministic.
             """
 
-            return self.expected_h(inputs)
+            expected_h = self.expected_h(inputs)
+            ml_h = tf.where(expected_h > 0.5, 1.0, 0.0)
+
+            return ml_h
 
         def compute_gradients(self, v):
             """Compute the gradient for the current batch.
@@ -633,8 +630,7 @@ class LocalFluent(Model):
         # Maximum likelihood
         out = self.preprocessing(inputs)
         out = self.flatten(out)
-        expected_h = self.rbm.predict(out)
-        ml_h = tf.where(expected_h > 0.5, 1.0, 0.0)
+        ml_h = self.rbm.predict(out)
 
         return ml_h
 

@@ -8,10 +8,9 @@ Agent:
 
 Features:
 	Todo next:
-		- Retrain
-		- Redefine forward pass as a deterministic ML estimate
-		- Merge to develop and retrain
 	Todo later/maybe:
+		- self._saved_v shouldn't be saved.
+			This causes an error when resuming with a different batch.
 
 Done:
 	- Simple autoencoder
