@@ -119,6 +119,9 @@ def main():
         default=agent_defaults["random_test"],
         help="Probability of a random action while testing/playing")
     agent_train.add_argument(
+        "--rand-eps", action="store_true", dest="random_epsilon",
+        help="Randomness varies from 0 to --rand-test for each episode.")
+    agent_train.add_argument(
         "--target-update", type=int, metavar="STEPS", dest="target_update",
         default=agent_defaults["target_update"], help="Frequency, in steps, "
         "at which the target model is updated (see DDQN)")
@@ -146,6 +149,9 @@ def main():
         "--rand-test", type=float, metavar="PROB", dest="random_test",
         default=agent_defaults["random_test"],
         help="Probability of a random action while testing/playing")
+    agent_play.add_argument(
+        "--rand-eps", action="store_true", dest="random_epsilon",
+        help="Randomness varies from 0 to --rand-test for each episode.")
 
     # Agent watch op
     agent_watch = agent_op.add_parser(

@@ -12,7 +12,7 @@ from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.callbacks import Callback, FileLogger
 
 from atarieyes.tools import Namespace, prepare_directories
-from atarieyes.agent.models import AtariAgent
+from atarieyes.agent.models import AtariAgent, EpisodeRandomEpsPolicy
 
 
 class Trainer:
@@ -60,6 +60,8 @@ class Trainer:
             self.logger,
             FileLogger(filepath=self.log_file, interval=100),
         ]
+        if args.random_epsilon:
+            self.callbacks.append(self.kerasrl_agent.test_policy.callback)
 
     @staticmethod
     def build_agent(spec):
@@ -82,7 +84,12 @@ class Trainer:
             value_min=spec.random_min, value_test=spec.random_test,
             nb_steps=spec.random_decay_steps,
         )
-        test_policy = EpsGreedyQPolicy(eps=spec.random_test)
+
+        # Test policy: constant eps or per-episode
+        test_policy = (
+            EpsGreedyQPolicy(eps=spec.random_test) if not spec.random_epsilon
+            else EpisodeRandomEpsPolicy(min_eps=0.0, max_eps=spec.random_test)
+        )
 
         # Define network for Atari games
         atari_agent = AtariAgent(

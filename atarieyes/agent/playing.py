@@ -61,7 +61,8 @@ class Player:
 
         # Agent
         self.kerasrl_agent = Trainer.build_agent(
-            Namespace(agent_args, training=False, random_test=args.random_test)
+            Namespace(agent_args, training=False, random_test=args.random_test,
+                random_epsilon=args.random_epsilon)
         )
 
         # Load weights
@@ -73,6 +74,8 @@ class Player:
 
         # Callbacks
         self.callbacks = []
+        if args.random_epsilon:
+            self.callbacks.append(self.kerasrl_agent.test_policy.callback)
         if self.streaming:
             self.callbacks.append(
                 Streamer(self.env_name, skip_frames=args.skip))
