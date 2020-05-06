@@ -21,6 +21,7 @@ def main():
         n_hidden=100,
         l2_const=0.1,
         sparsity_const=0.0,
+        shuffle=10000,
     )
     agent_defaults = dict(
         memory_limit=1000000,
@@ -217,6 +218,9 @@ def main():
         "--sparsity-const", type=float, dest="sparsity_const",
         default=features_defaults["sparsity_const"],
         help="Scale factor of the sparsity promoting loss")
+    features_train.add_argument(
+        "--shuffle", type=int, default=features_defaults["shuffle"],
+        help="Size of the shuffle buffer.")
 
     # Feature selection op
     feature_select = features_op.add_parser(

@@ -40,7 +40,7 @@ class Trainer:
         # Dataset
         dataset = make_dataset(
             lambda: agent_player(args.env, args.stream),
-            args.batch_size, self.frame_shape)
+            args.batch_size, self.frame_shape, args.shuffle)
         self.dataset_it = iter(dataset)
 
         # Model
@@ -317,7 +317,7 @@ class TensorBoardLogger:
                 tf.summary.histogram(name, tensor, step)
 
 
-def make_dataset(game_player, batch, frame_shape):
+def make_dataset(game_player, batch, frame_shape, shuffle_size):
     """Create a TF Dataset from frames of a game.
 
     Creates a TF Dataset which contains batches of frames.
@@ -326,6 +326,7 @@ def make_dataset(game_player, batch, frame_shape):
         must return frames of the game.
     :param batch: Batch size.
     :param frame_shape: Frame shape retuned by game_player.
+    :param shuffle_size: size of the shuffle buffer.
     :return: Tensorflow Dataset.
     """
 
@@ -339,7 +340,7 @@ def make_dataset(game_player, batch, frame_shape):
     dataset = tf.data.Dataset.from_generator(
         frame_iterate, output_types=tf.uint8, output_shapes=frame_shape)
 
-    dataset = dataset.shuffle(5000)
+    dataset = dataset.shuffle(shuffle_size)
     dataset = dataset.batch(batch)
     dataset = dataset.prefetch(1)
 
