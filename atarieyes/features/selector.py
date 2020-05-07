@@ -1,4 +1,25 @@
-"""Graphical tool for feature selection."""
+"""Graphical tool for feature selection.
+
+The selected local features are saved in a json file named after the
+environment. This is an example that could be generated:
+{
+    "_frame": [ 8, 32, 152, 197 ],
+    "green_bar": {
+        "region": [ 8, 81, 152, 87 ],
+        "fluents": {
+            "symbol": "temporal formula",
+            ...
+        }
+    },
+    ...
+}
+"_frame" is a special name. The coordinates are the large crop of the entire
+frame (possibly hiding unrelevant parts).
+"green_bar" is the name chosen for a region (could be any). "region" holds
+the coordinates for its crop. "fluents" holds a dict of symbols. Each of them
+is a propositional atom with an associated LDLf temporal formula.
+Symbols are not added by this selection but you can manually define them.
+"""
 
 import gym
 import json
@@ -16,8 +37,8 @@ def selection_tool(args):
     This allows to manually select:
         - The image box, that is the large region where the game is displayed.
             This allows to ignore the useless borders and numbers.
-        - A set of local features. A local feature is a region of the game
-            which can be in one of two states.
+        - A set of local features. A local feature is an interesting region of
+          the game where to extract fluents.
 
     :param args: namespace of arguments. See --help.
     """
@@ -58,17 +79,22 @@ def selection_tool(args):
     box = np.round(np.array(box) / f).astype(int).tolist()
     selections = np.round(np.array(selections) / f).astype(int).tolist()
 
-    # Format data
-    data = {}
-    data["box"] = [box[0], box[1], box[0] + box[2], box[1] + box[3]]
-    regions = []
+    # Selections as coordinates
+    selections_ = []
     for selection in selections:
-        regions.append(
+        selections_.append(
             [selection[0], selection[1], selection[0] + selection[2],
                 selection[1] + selection[3]])
+    selections = selections_
 
-    data["regions"] = {
-        name: selection for name, selection in zip(selection_names, regions)}
+    # Json format
+    data = {
+        name: {
+            "region": selection,
+            "fluents": {}
+        } for name, selection in zip(selection_names, selections)
+    }
+    data["_frame"] = [box[0], box[1], box[0] + box[2], box[1] + box[3]]
 
     # Save
     env_file = os.path.join(info_dir, env.spec.id + ".json")

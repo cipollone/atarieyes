@@ -1,27 +1,34 @@
 {
-    "box": [
+    "_frame": [
         8,
         32,
         152,
         197
     ],
-    "regions": {
-        "green_bar": [
+    "blue_right": {
+        "fluents": {},
+        "region": [
+            32,
+            87,
+            152,
+            93
+        ]
+    },
+    "green_bar": {
+        "fluents": {},
+        "region": [
             8,
             81,
             152,
             87
-        ],
-        "left_column": [
+        ]
+    },
+    "left_column": {
+        "fluents": {},
+        "region": [
             8,
             57,
             16,
-            93
-        ],
-        "blue_right": [
-            32,
-            87,
-            152,
             93
         ]
     }

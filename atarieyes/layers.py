@@ -275,14 +275,14 @@ class CropToEnv(BaseLayer):
 
     The purpose of this function is to crop to the relevant part of the frame
     for each game. The box of each game can be specified with the Selector
-    tool.
+    tool. See selector doc for more.
     """
 
-    def __init__(self, env_name, region="box", **kwargs):
+    def __init__(self, env_name, region="_frame", **kwargs):
         """Initialize.
 
         :param env_name: a gym environment name.
-        :param region: "box" is a large region for the relevant part of the
+        :param region: "_frame" is a large region for the relevant part of the
             frame. Any other name is interpreted as a the identifier of
             a local feature.
         :raises: ValueError: if unknown env.
@@ -295,10 +295,8 @@ class CropToEnv(BaseLayer):
         else:
             with open(env_json) as f:
                 env_data = json.load(f)
-            if region == "box":
-                box = env_data["box"]
-            else:
-                box = env_data["regions"][region]
+            box = env_data[region] if region == "_frame" \
+                else env_data[region]["region"]
 
         # Check
         if not box:
