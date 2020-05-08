@@ -12,6 +12,7 @@ import tensorflow as tf
 from atarieyes.tools import ABC2, AbstractAttribute
 
 # TODO: tf.function
+# TODO: maybe population should be a variable. If it can be assigned in slices.
 
 
 class GeneticAlgorithm(ABC2):
@@ -80,21 +81,15 @@ class GeneticAlgorithm(ABC2):
         sampled = self.sample_symbols(n_mutations)
         assert sampled.shape == (n_mutations, self.symbol_len)
 
-        # Collect indices of the mutated positions
-        symbol_indices = tf.range(self.symbol_len, dtype=tf.int64)
-        indices2 = tf.reshape(
-            tf.tile(symbol_indices[:,tf.newaxis], (1, n_mutations)), (-1, 1))
-        indices = tf.tile(mutations_idx, (self.symbol_len, 1))
-        indices = tf.concat((indices, indices2), 1)
-        sampled = tf.reshape(sampled, [-1])
-
         # Apply
-        sampled_population = tf.sparse.SparseTensor(
-            indices, sampled, self.population.shape)
-        sampled_population = tf.sparse.to_dense(
-            tf.sparse.reorder(sampled_population), validate_indices=False)
+        updates = tf.scatter_nd(
+            indices=mutations_idx, updates=sampled,
+            shape=self.population.shape
+        )
         self.population = tf.where(
-            mutations[..., tf.newaxis], sampled_population, self.population)
+            mutations[..., tf.newaxis], updates, self.population)
+
+        return mutations, mutations_idx, updates
 
     def reproduce(self, fitness):
         """Updates the individuals in the population based on their fitness.
@@ -162,3 +157,31 @@ class GeneticAlgorithm(ABC2):
         self.reproduce(fitness)
         self.crossover()
         self.mutate()
+
+
+class BooleanRulesGA(GeneticAlgorithm):
+    """Genetic algorithm for Boolean functions.
+
+    The biggest assumption made by this class is that the target concept
+    is representable as a boolean expression of NOT, AND only.
+    Each individual is a vector of constraints on the input. Each symbol
+    has the following meaning: -1 don't care, 0 must be false, 1 must be true.
+    """
+
+    def __init__(self, n_inputs, **kwargs):
+        """Initialize.
+
+        :param n_inputs: lenght of the binary input vector.
+        :param kwargs: GeneticAlgorithm params.
+        """
+
+        # Super
+        GeneticAlgorithm.__init__(self, **kwargs)
+
+        # Store
+        self._n_inputs = n_inputs
+
+    def initial_population(self):
+        """Generate the initial population."""
+
+        # TODO: continue
