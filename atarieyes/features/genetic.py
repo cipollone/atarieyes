@@ -6,13 +6,11 @@ Values and lists are actually Tf tensors.
 """
 
 from abc import abstractmethod
-import numpy as np
 import tensorflow as tf
 
 from atarieyes.tools import ABC2, AbstractAttribute
 
 # TODO: tf.function
-# TODO: maybe population should be a variable. If it can be assigned in slices.
 
 
 class GeneticAlgorithm(ABC2):
@@ -21,25 +19,30 @@ class GeneticAlgorithm(ABC2):
     # This variable holds the current population (a list of individuals)
     population = AbstractAttribute()
 
-    def __init__(self, mutation_p):
+    def __init__(self, n_individuals, mutation_p):
         """Initialize.
-        
+
+        :param n_individuals: population size.
         :param mutation_p: probability of random mutation for each symbol
             (should be rather small).
         """
 
-        # Population
+        # Store
+        self.mutation_p = mutation_p
+        self.n_individuals = n_individuals
+
+        assert n_individuals % 2 == 0, "Population must be of even size"
+
+        # Initialize
         self.population = self.initial_population()
 
-        assert self.population.ndim == 3, (
-            "Expecting 3D shape: (individuals, symbols, symbol_len)")
-        assert self.population.shape[0] % 2 == 0, "Population be of even size"
+        assert self.population.ndim == 3 and \
+            self.population.shape[0] == n_individuals, \
+            "Expecting 3D shape: (individuals, symbols, symbol_len)"
 
         # Constants
-        self.n_individuals = self.population.shape[0]
         self.n_symbols = self.population.shape[1]
         self.symbol_len = self.population.shape[2]
-        self.mutation_p = mutation_p
 
     @abstractmethod
     def initial_population(self):
@@ -175,13 +178,23 @@ class BooleanRulesGA(GeneticAlgorithm):
         :param kwargs: GeneticAlgorithm params.
         """
 
-        # Super
-        GeneticAlgorithm.__init__(self, **kwargs)
-
         # Store
         self._n_inputs = n_inputs
+
+        # Super
+        GeneticAlgorithm.__init__(self, **kwargs)
 
     def initial_population(self):
         """Generate the initial population."""
 
-        # TODO: continue
+        population = tf.random.uniform(
+            (self.n_individuals, self._n_inputs, 1), -1, 2, dtype=tf.int32)
+        return population
+
+    # TODO: compute_fitness
+
+    def sample_symbols(self, n):
+        """Sample random symbols."""
+
+        sampled = tf.random.uniform((n, 1), -1, 2, dtype=tf.int32)
+        return sampled
