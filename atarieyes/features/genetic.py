@@ -20,8 +20,12 @@ class GeneticAlgorithm(ABC2):
     # This variable holds the current population (a list of individuals)
     population = AbstractAttribute()
 
-    def __init__(self):
-        """Initialize."""
+    def __init__(self, mutation_p):
+        """Initialize.
+        
+        :param mutation_p: probability of random mutation for each symbol
+            (should be rather small).
+        """
 
         # Population
         self.population = self.initial_population()
@@ -30,9 +34,11 @@ class GeneticAlgorithm(ABC2):
             "Expecting 3D shape: (individuals, symbols, symbol_len)")
         assert self.population.shape[0] % 2 == 0, "Population be of even size"
 
+        # Constants
         self.n_individuals = self.population.shape[0]
         self.n_symbols = self.population.shape[1]
         self.symbol_len = self.population.shape[2]
+        self.mutation_p = mutation_p
 
     @abstractmethod
     def initial_population(self):
@@ -51,8 +57,44 @@ class GeneticAlgorithm(ABC2):
         """
 
     @abstractmethod
+    def sample_symbols(self, n):
+        """Sample n new symbols randomly.
+
+        Each individual is made of a sequence of symbols. This function
+        samples on that space.
+
+        :param n: number of symbols to sample
+        :return: a 2D Tensor; a sequence of symbols
+        """
+
     def mutate(self):
-        """Apply random mutations."""
+        """Apply rare random mutations to each symbol."""
+
+        # Select mutations
+        samples = tf.random.uniform((self.n_individuals, self.n_symbols), 0, 1)
+        mutations = samples < self.mutation_p
+        mutations_idx = tf.where(mutations)
+        n_mutations = tf.shape(mutations_idx)[0]
+
+        # Sampling
+        sampled = self.sample_symbols(n_mutations)
+        assert sampled.shape == (n_mutations, self.symbol_len)
+
+        # Collect indices of the mutated positions
+        symbol_indices = tf.range(self.symbol_len, dtype=tf.int64)
+        indices2 = tf.reshape(
+            tf.tile(symbol_indices[:,tf.newaxis], (1, n_mutations)), (-1, 1))
+        indices = tf.tile(mutations_idx, (self.symbol_len, 1))
+        indices = tf.concat((indices, indices2), 1)
+        sampled = tf.reshape(sampled, [-1])
+
+        # Apply
+        sampled_population = tf.sparse.SparseTensor(
+            indices, sampled, self.population.shape)
+        sampled_population = tf.sparse.to_dense(
+            tf.sparse.reorder(sampled_population), validate_indices=False)
+        self.population = tf.where(
+            mutations[..., tf.newaxis], sampled_population, self.population)
 
     def reproduce(self, fitness):
         """Updates the individuals in the population based on their fitness.
