@@ -2,19 +2,22 @@
 
 Genetic algorithms are really different from other gradient-based methods.
 I'll implement the custom training here, then cast this as a generic Model.
-Values and lists are actually Tf tensors.
 """
 
 from abc import abstractmethod
+import math
 import tensorflow as tf
 
 from atarieyes.tools import ABC2, AbstractAttribute
 
-# TODO: tf.function
-
 
 class GeneticAlgorithm(ABC2):
-    """Top down structure of a Genetic Algorithm."""
+    """Top down structure of a Genetic Algorithm.
+    
+    Values and lists are actually Tf tensors.
+    All subclasses should override with methods that actually work with
+    tf.function.
+    """
 
     # This variable holds the current population (a list of individuals)
     population = AbstractAttribute()
@@ -35,6 +38,9 @@ class GeneticAlgorithm(ABC2):
 
         # Initialize
         self.population = self.initial_population()
+        self.fitness = tf.Variable(
+            tf.ones([n_individuals], dtype=tf.float32), trainable=False)
+        self._started = tf.Variable(False)
 
         assert self.population.ndim == 3 and \
             self.population.shape[0] == n_individuals, \
@@ -57,7 +63,7 @@ class GeneticAlgorithm(ABC2):
     def compute_fitness(self):
         """Compute the fitness value (euristic score) for each individual.
 
-        :return: a list of positive fitness values
+        :return: a list of float positive fitness values
         """
 
     @abstractmethod
@@ -71,6 +77,19 @@ class GeneticAlgorithm(ABC2):
         :return: a 2D Tensor; a sequence of symbols
         """
 
+    @abstractmethod
+    def have_solution(self, fitness):
+        """Return whether a solution has been reached.
+
+        Not all problems can easily tell whether a solution has been found.
+        Those can always return False.
+
+        :param fitness: vector returned by compute_fitness.
+        :return: None, if training can continue, or an individual from
+            the population if training can stop and consider that as a
+            solution.
+        """
+
     def mutate(self):
         """Apply rare random mutations to each symbol."""
 
@@ -82,7 +101,6 @@ class GeneticAlgorithm(ABC2):
 
         # Sampling
         sampled = self.sample_symbols(n_mutations)
-        assert sampled.shape == (n_mutations, self.symbol_len)
 
         # Apply
         updates = tf.scatter_nd(
@@ -99,6 +117,8 @@ class GeneticAlgorithm(ABC2):
 
         :param fitness: returned from compute_fitness; assumed positive.
         """
+
+        assert fitness.shape == [self.n_individuals]
 
         # Sample a new generation
         logits = tf.math.log(fitness)
@@ -154,12 +174,23 @@ class GeneticAlgorithm(ABC2):
         return pair
 
     def train_step(self):
-        """One training step."""
+        """One training step.
 
-        fitness = self.compute_fitness()
-        self.reproduce(fitness)
+        :return: fitness of the current population.
+        """
+
+        # Init
+        if not self._started:
+            self.fitness.assign(self.compute_fitness())
+            self._started.assign(True)
+
+        # Loop
+        self.reproduce(self.fitness)
         self.crossover()
         self.mutate()
+        self.fitness.assign(self.compute_fitness())
+
+        return self.fitness
 
 
 class BooleanRulesGA(GeneticAlgorithm):
@@ -189,7 +220,7 @@ class BooleanRulesGA(GeneticAlgorithm):
 
         population = tf.random.uniform(
             (self.n_individuals, self._n_inputs, 1), -1, 2, dtype=tf.int32)
-        return population
+        return tf.cast(population, tf.int8)
 
     # TODO: compute_fitness
 
@@ -197,4 +228,77 @@ class BooleanRulesGA(GeneticAlgorithm):
         """Sample random symbols."""
 
         sampled = tf.random.uniform((n, 1), -1, 2, dtype=tf.int32)
+        return tf.cast(sampled, tf.int8)
+
+    def have_solution(self, fitness):
+        """Cannot tell because it's unsupervised."""
+
+        return None
+
+
+class QueensGA(GeneticAlgorithm):
+    """N-queens problem.
+
+    This class is only used to test the algorithm. Use it as a reference.
+    Each individual is a vector of heights of each queen.
+    """
+
+    def __init__(self, size, **kwargs):
+
+        # Store
+        self._size = size
+        self._n_pairs = int(
+            math.factorial(size) / (2 * math.factorial(size - 2)))
+
+        # Super
+        GeneticAlgorithm.__init__(self, **kwargs)
+
+    def initial_population(self):
+
+        positions = tf.random.uniform(
+            (self.n_individuals, self._size, 1), 0, self._size, dtype=tf.int32)
+        return positions
+
+    def sample_symbols(self, n):
+
+        sampled = tf.random.uniform((n, 1), 0, self._size, dtype=tf.int32)
         return sampled
+
+    def compute_fitness(self):
+        """Count the number of conflicts."""
+
+        # Compute positions
+        rows = self.population[:,:,0]
+        cols = tf.tile(
+            tf.expand_dims(tf.range(self._size), 0), (self.n_individuals, 1))
+        diag1 = cols + rows
+        diag2 = cols - rows
+
+        # Compute conflicts  (columns are already satisfacted in this repr)
+        row_conflicts = tf.map_fn(self._count_conflicts, rows)
+        diag1_conflicts = tf.map_fn(self._count_conflicts, diag1)
+        diag2_conflicts = tf.map_fn(self._count_conflicts, diag2)
+        conflicts = row_conflicts + diag1_conflicts + diag2_conflicts 
+
+        # Compute fitness: number of non-attacking queens
+        tf.debugging.assert_less_equal(conflicts, self._n_pairs, "Got " +
+            str(conflicts) + " conflicts for " + str(self._size) + " queens")
+        non_attacking = self._n_pairs - conflicts
+
+        return tf.cast(non_attacking, tf.float32)
+
+    def _count_conflicts(self, individual):
+
+        _, _, counts = tf.unique_with_counts(individual)
+        conflicts = tf.reduce_sum(counts - 1)
+
+        return conflicts
+
+    def have_solution(self, fitness):
+        """When all queens are non_attacking."""
+
+        solutions = tf.where(fitness == self._n_pairs)[:,0]
+        if tf.shape(solutions)[0] > 0:
+            return self.population[solutions[0]]
+        else:
+            return None
