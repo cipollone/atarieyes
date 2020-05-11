@@ -20,6 +20,12 @@ class ABCMeta2(ABCMeta):
         class C(metaclass=ABCMeta2):
             attr = AbstractAttribute()
             ...
+
+    It is also possible to define methods and properties with that name:
+        class C(metaclass=ABCMeta2):
+            def attr(self):
+                ...
+
     Note: methods of this class are not inherited by other classes' instances.
     """
 

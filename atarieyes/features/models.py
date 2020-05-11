@@ -6,6 +6,7 @@ import gym
 import tensorflow as tf
 
 from atarieyes import layers
+from atarieyes.features import genetic
 from atarieyes.layers import BaseLayer, make_layer
 from atarieyes.tools import ABC2, AbstractAttribute
 
@@ -14,20 +15,25 @@ class Model(ABC2):
     """Interface of a model.
 
     Assuming the model is built on initialization.
-    The purpose of this interface is efficiency: usually many computations are
-    not required if we just need to make predictions, not train the model.
+    `compute_all` is the forward pass used during training, while `predict`
+    should be the minimal set of operations needed to compute the output.
 
     The `keras` attribute is a keras model.
     Some models require a non-standard training step. These can manually
     compute the gradient to be applied, inside the compute_all function.
-    The `computed_gradient` attribute indicates this behaviour.
+    The `computed_gradient` must be set to True, in this case.
+    If a completely different training step is necessary (not gradient-based),
+    one can define it in a method called `train_step`. Otherwise, in __init__,
+    we should set self.train_step to False. Train_step() must be compatible
+    with Trainer.train_step().
     """
 
     # This is the keras model
     keras = AbstractAttribute()
 
-    # Custom training? bool
+    # Custom training?
     computed_gradient = AbstractAttribute()
+    train_step = AbstractAttribute()
 
     @abstractmethod
     def predict(self, inputs):
@@ -100,6 +106,7 @@ class FrameAutoencoder(Model):
         # Store
         self.keras = model
         self.computed_gradient = False
+        self.train_step = False
 
     def predict(self, inputs):
         """Make predictions."""
@@ -220,6 +227,7 @@ class BinaryRBM(Model):
         # Save
         self.keras = model
         self.computed_gradient = True
+        self.train_step = False
 
     def compute_all(self, inputs):
         """Compute all tensors."""
@@ -603,6 +611,7 @@ class LocalFluent(Model):
         # Save
         self.keras = model
         self.computed_gradient = True
+        self.train_step = False
 
     def compute_all(self, inputs):
         """Compute all tensors."""
@@ -643,3 +652,117 @@ class LocalFluent(Model):
         """Tensors to visualize."""
 
         return self.rbm.histograms(outputs)
+
+
+class GeneticModel(Model):
+    """Bridge between genetic algorithms and standard NN models.
+
+    A GeneticAlgorithm is not a I/O Model. This class is only used to fit
+    the algorithm into the same training loop, with merics.
+    This model represents the training procedure, not the individuals.
+    """
+
+    def __init__(self, ga):
+        """Initialize.
+
+        :param ga: a genetic.GeneticAlgorithm instance
+        """
+
+        # Check
+        if not isinstance(ga, genetic.GeneticAlgorithm):
+            raise TypeError("Not a GeneticAlgorithm instance")
+
+        # Store
+        self.ga = ga
+
+        # Keras model
+        keras_block = self.GALayer(ga)
+        pop_shape, pop_dtype = ga.population.shape, ga.population.dtype
+        inputs = (
+            tf.keras.Input(shape=pop_shape[1:], batch_size=pop_shape[0],
+                dtype=pop_dtype, name="population"),
+            tf.keras.Input(shape=[], batch_size=pop_shape[0], name="fitness"),
+        )
+        ret = keras_block(inputs)
+
+        model = tf.keras.Model(
+            inputs=inputs, outputs=ret, name="GeneticAlgorithm")
+        model.summary()
+
+        # Save
+        self.keras = model
+        self.computed_gradient = False
+        self.train_step = self.ga.train_step
+
+    class GALayer(BaseLayer):
+        """Keras wrapper around genetic algorithms."""
+
+        def __init__(self, ga):
+
+            BaseLayer.__init__(self)
+            self._vars = [ga.population, ga.fitness]
+            self._forward = ga.compute_train_step
+            self.built = True
+
+        def call(self, inputs):
+
+            return self._forward(*inputs)
+
+    def predict(self, inputs):
+        """Make a prediction with the model."""
+
+        raise NotImplementedError(
+            "A generic GeneticAlgorithm is not a I/O model")
+
+    def compute_all(self, inputs):
+        """Nothing to compute. Just show the training graph."""
+
+        population, fitness = self.ga.compute_train_step(*inputs)
+        mean_fitness = tf.math.reduce_mean(fitness)
+
+        # Ret
+        ret = dict(
+            outputs=[population, fitness], 
+            loss=None,
+            metrics=dict(mean_fitness=mean_fitness),
+            gradients=None,
+        )
+        return ret
+
+    def images(self, outputs):
+        """Returns a set of images to visualize."""
+
+        return {}
+
+    def histograms(self, outputs):
+        """Returns a set of tensors to visualize as histograms."""
+
+        # Visualizing population sparsity with 1D PCA
+        population = tf.cast(outputs[0], dtype=tf.float32)
+        population = tf.reshape(population, shape=(population.shape[0], -1))
+        s, u, v = tf.linalg.svd(population)
+        population_1d = u[:,0] * s[0]
+
+        # Histograms
+        tensors = {
+            "fitness": outputs[1],
+            "population_1d": population_1d,
+        }
+
+        return tensors
+
+
+class TestingGM(GeneticModel):
+    """Just for debugging."""
+
+    def __init__(self):
+
+        GeneticModel.__init__(
+            self, genetic.QueensGA(
+                size=10, n_individuals=1000, mutation_p=0.005))
+
+    def compute_all(self, inputs):
+        
+        return GeneticModel.compute_all(
+            self, (self.ga.population, self.ga.fitness))
+
