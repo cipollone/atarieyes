@@ -8,6 +8,7 @@ from abc import abstractmethod
 import math
 import tensorflow as tf
 
+from atarieyes.layers import make_layer
 from atarieyes.tools import ABC2, AbstractAttribute
 
 
@@ -23,6 +24,8 @@ class GeneticAlgorithm(ABC2):
 
     def __init__(self, n_individuals, mutation_p):
         """Initialize.
+
+        Subclasses must call this after their initializations.
 
         :param n_individuals: population size.
         :param mutation_p: probability of random mutation for each symbol
@@ -49,6 +52,15 @@ class GeneticAlgorithm(ABC2):
         # Constants
         self.n_symbols = self.population.shape[1]
         self.symbol_len = self.population.shape[2]
+
+        # Transform functions to layers (optional, for a nice graph)
+        self.compute_fitness = make_layer(
+            "ComputeFitness", self.compute_fitness)()
+        self.sample_symbols = make_layer(
+            "SampleSymbols", self.sample_symbols)()
+        self.mutate = make_layer("Mutate", self.mutate)()
+        self.reproduce = make_layer("Reproduce", self.reproduce)()
+        self.crossover = make_layer("Crossover", self.crossover)()
 
     @abstractmethod
     def initial_population(self):
@@ -118,14 +130,15 @@ class GeneticAlgorithm(ABC2):
 
         return new_population
 
-    def reproduce(self, population, fitness):
+    def reproduce(self, inputs):
         """Updates the individuals in the population based on their fitness.
 
-        :param population: the list of individuals
-        :param fitness: returned from compute_fitness; assumed positive.
+        :param inputs: (population, fitness) tuple. This format is used to
+            be compatible with layers
         :return: updated list of individuals
         """
 
+        population, fitness = inputs
         assert fitness.shape == [self.n_individuals]
 
         # Sample a new generation
@@ -196,10 +209,19 @@ class GeneticAlgorithm(ABC2):
         :return: (new_population, new_fitness)
         """
 
-        population = self.reproduce(population, fitness)
+        # Rename inputs
+        population = tf.identity(population, name="population")
+        fitness = tf.identity(fitness, name="fitness")
+
+        # Compute
+        population = self.reproduce((population, fitness))
         population = self.crossover(population)
         population = self.mutate(population)
         fitness = self.compute_fitness(population)
+
+        # Rename inputs
+        population = tf.identity(population, name="new_population")
+        fitness = tf.identity(fitness, name="new_fitness")
 
         return population, fitness
 

@@ -44,11 +44,7 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.LocalFluent(
-            env_name=args.env, region="blue_right", n_hidden=args.n_hidden,
-            batch_size=args.batch_size, l2_const=args.l2_const,
-            sparsity_const=args.sparsity_const,
-        )
+        self.model = models.TestingGM()
 
         # Optimization
         if self.decay_rate:

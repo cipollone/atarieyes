@@ -6,17 +6,17 @@ import gym
 import tensorflow as tf
 
 from atarieyes import layers
+from atarieyes.features import genetic
 from atarieyes.layers import BaseLayer, make_layer
 from atarieyes.tools import ABC2, AbstractAttribute
-from atarieyes.features.genetic import GeneticAlgorithm
 
 
 class Model(ABC2):
     """Interface of a model.
 
     Assuming the model is built on initialization.
-    The purpose of this interface is efficiency: usually many computations are
-    not required if we just need to make predictions, not train the model.
+    `compute_all` is the forward pass used during training, while `predict`
+    should be the minimal set of operations needed to compute the output.
 
     The `keras` attribute is a keras model.
     Some models require a non-standard training step. These can manually
@@ -669,7 +669,7 @@ class GeneticModel(Model):
         """
 
         # Check
-        if not isinstance(ga, GeneticAlgorithm):
+        if not isinstance(ga, genetic.GeneticAlgorithm):
             raise TypeError("Not a GeneticAlgorithm instance")
 
         # Store
@@ -692,7 +692,7 @@ class GeneticModel(Model):
         # Save
         self.keras = model
         self.computed_gradient = False
-        self.train_step = False    # TODO: define
+        self.train_step = self.ga.train_step
 
     class GALayer(BaseLayer):
         """Keras wrapper around genetic algorithms."""
@@ -743,3 +743,20 @@ class GeneticModel(Model):
         }
 
         return tensors
+
+
+# TODO: delete when done
+class TestingGM(GeneticModel):
+    """Just for debugging."""
+
+    def __init__(self):
+
+        GeneticModel.__init__(
+            self, genetic.QueensGA(
+                size=8, n_individuals=200, mutation_p=0.005))
+
+    def compute_all(self, inputs):
+        
+        return GeneticModel.compute_all(
+            self, (self.ga.population, self.ga.fitness))
+
