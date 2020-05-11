@@ -8,7 +8,6 @@ Agent:
 
 Features:
 	Todo next:
-		- where to @tf.function, update docstrings
 		- Create a Model interface for GA with metrics and custom training
 		- Add flloat to dependecy files
 		- Add fluents to regions

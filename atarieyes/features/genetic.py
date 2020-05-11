@@ -15,12 +15,11 @@ class GeneticAlgorithm(ABC2):
     """Top down structure of a Genetic Algorithm.
     
     Values and lists are actually Tf tensors.
+    'population' and 'fitness' are two variables that store the current states
+    after each training step.
     All subclasses should override with methods that actually work with
-    tf.function.
+    tf.function (use tf.py_function, if necessary).
     """
-
-    # This variable holds the current population (a list of individuals)
-    population = AbstractAttribute()
 
     def __init__(self, n_individuals, mutation_p):
         """Initialize.
@@ -37,12 +36,13 @@ class GeneticAlgorithm(ABC2):
         assert n_individuals % 2 == 0, "Population must be of even size"
 
         # Initialize
-        self.population = self.initial_population()
+        self.population = tf.Variable(
+            self.initial_population(), trainable=False, name="Population_var")
         self.fitness = tf.Variable(
-            tf.ones([n_individuals], dtype=tf.float32), trainable=False)
-        self._started = tf.Variable(False)
+            self.compute_fitness(self.population), trainable=False,
+            name="Fitness_var")
 
-        assert self.population.ndim == 3 and \
+        assert self.population.shape.ndims == 3 and \
             self.population.shape[0] == n_individuals, \
             "Expecting 3D shape: (individuals, symbols, symbol_len)"
 
@@ -60,9 +60,13 @@ class GeneticAlgorithm(ABC2):
         """
 
     @abstractmethod
-    def compute_fitness(self):
+    def compute_fitness(self, population):
         """Compute the fitness value (euristic score) for each individual.
 
+        Values (0, +inf) are mapped in probabilities (0, 1).
+        Decorate this with tf.function because it may be called on its own.
+
+        :param population: the list of individuals
         :return: a list of float positive fitness values
         """
 
@@ -78,20 +82,23 @@ class GeneticAlgorithm(ABC2):
         """
 
     @abstractmethod
-    def have_solution(self, fitness):
+    def have_solution(self):
         """Return whether a solution has been reached.
 
         Not all problems can easily tell whether a solution has been found.
         Those can always return False.
 
-        :param fitness: vector returned by compute_fitness.
         :return: None, if training can continue, or an individual from
             the population if training can stop and consider that as a
             solution.
         """
 
-    def mutate(self):
-        """Apply rare random mutations to each symbol."""
+    def mutate(self, population):
+        """Apply rare random mutations to each symbol.
+        
+        :param population: the list of individuals
+        :return: updated list of individuals
+        """
 
         # Select mutations
         samples = tf.random.uniform((self.n_individuals, self.n_symbols), 0, 1)
@@ -105,17 +112,19 @@ class GeneticAlgorithm(ABC2):
         # Apply
         updates = tf.scatter_nd(
             indices=mutations_idx, updates=sampled,
-            shape=self.population.shape
+            shape=population.shape,
         )
-        self.population = tf.where(
-            mutations[..., tf.newaxis], updates, self.population)
+        new_population = tf.where(
+            mutations[..., tf.newaxis], updates, population)
 
-        return mutations, mutations_idx, updates
+        return new_population
 
-    def reproduce(self, fitness):
+    def reproduce(self, population, fitness):
         """Updates the individuals in the population based on their fitness.
 
+        :param population: the list of individuals
         :param fitness: returned from compute_fitness; assumed positive.
+        :return: updated list of individuals
         """
 
         assert fitness.shape == [self.n_individuals]
@@ -123,14 +132,19 @@ class GeneticAlgorithm(ABC2):
         # Sample a new generation
         logits = tf.math.log(fitness)
         selection = tf.random.categorical([logits], self.n_individuals)
-        population = tf.gather(self.population, selection[0])
+        new_population = tf.gather(population, selection[0])
 
-        assert population.shape == self.population.shape, (
+        assert new_population.shape == population.shape, (
             "Logic error: unexpected shape")
-        self.population = population
 
-    def crossover(self):
-        """Apply the crossover to each consecutive pair of individuals."""
+        return new_population
+
+    def crossover(self, population):
+        """Apply the crossover to each consecutive pair of individuals.
+
+        :param population: the list of individuals
+        :return: updated list of individuals
+        """
 
         # Choose crossover points
         n_pairs = tf.math.floordiv(self.n_individuals, 2)
@@ -139,20 +153,22 @@ class GeneticAlgorithm(ABC2):
 
         # Prepare individuals
         parents = tf.reshape(
-            self.population, (n_pairs, 2, self.n_symbols, self.symbol_len))
+            population, (n_pairs, 2, self.n_symbols, self.symbol_len))
 
         # Apply
-        population = tf.map_fn(
+        new_population = tf.map_fn(
             self._crossover_fn, [parents, positions], dtype=parents.dtype,
             parallel_iterations=20,
         )
 
         # Return to population
-        population = tf.reshape(
-            population, (self.n_individuals, self.n_symbols, self.symbol_len))
-        assert population.shape == self.population.shape, (
+        new_population = tf.reshape(
+            new_population, (
+                self.n_individuals, self.n_symbols, self.symbol_len))
+        assert new_population.shape == population.shape, (
             "Logic error: unexpected shape")
-        self.population = population
+
+        return new_population
 
     @staticmethod
     def _crossover_fn(tensor):
@@ -173,24 +189,19 @@ class GeneticAlgorithm(ABC2):
 
         return pair
 
+    @tf.function
     def train_step(self):
-        """One training step.
+        """One training step."""
 
-        :return: fitness of the current population.
-        """
+        # Compute
+        population = self.reproduce(self.population, self.fitness)
+        population = self.crossover(population)
+        population = self.mutate(population)
+        fitness = self.compute_fitness(population)
 
-        # Init
-        if not self._started:
-            self.fitness.assign(self.compute_fitness())
-            self._started.assign(True)
-
-        # Loop
-        self.reproduce(self.fitness)
-        self.crossover()
-        self.mutate()
-        self.fitness.assign(self.compute_fitness())
-
-        return self.fitness
+        # Store for later
+        self.population.assign(population)
+        self.fitness.assign(fitness)
 
 
 class BooleanRulesGA(GeneticAlgorithm):
@@ -230,7 +241,7 @@ class BooleanRulesGA(GeneticAlgorithm):
         sampled = tf.random.uniform((n, 1), -1, 2, dtype=tf.int32)
         return tf.cast(sampled, tf.int8)
 
-    def have_solution(self, fitness):
+    def have_solution(self):
         """Cannot tell because it's unsupervised."""
 
         return None
@@ -264,11 +275,12 @@ class QueensGA(GeneticAlgorithm):
         sampled = tf.random.uniform((n, 1), 0, self._size, dtype=tf.int32)
         return sampled
 
-    def compute_fitness(self):
-        """Count the number of conflicts."""
+    @tf.function
+    def compute_fitness(self, population):
+        """Number of non-attacking queens."""
 
         # Compute positions
-        rows = self.population[:,:,0]
+        rows = population[:,:,0]
         cols = tf.tile(
             tf.expand_dims(tf.range(self._size), 0), (self.n_individuals, 1))
         diag1 = cols + rows
@@ -294,10 +306,10 @@ class QueensGA(GeneticAlgorithm):
 
         return conflicts
 
-    def have_solution(self, fitness):
+    def have_solution(self):
         """When all queens are non_attacking."""
 
-        solutions = tf.where(fitness == self._n_pairs)[:,0]
+        solutions = tf.where(self.fitness == self._n_pairs)[:,0]
         if tf.shape(solutions)[0] > 0:
             return self.population[solutions[0]]
         else:
