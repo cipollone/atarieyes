@@ -718,12 +718,13 @@ class GeneticModel(Model):
         """Nothing to compute. Just show the training graph."""
 
         population, fitness = self.ga.compute_train_step(*inputs)
+        mean_fitness = tf.math.reduce_mean(fitness)
 
         # Ret
         ret = dict(
             outputs=[population, fitness], 
             loss=None,
-            metrics={},
+            metrics=dict(mean_fitness=mean_fitness),
             gradients=None,
         )
         return ret
@@ -736,16 +737,21 @@ class GeneticModel(Model):
     def histograms(self, outputs):
         """Returns a set of tensors to visualize as histograms."""
 
-        # TODO: how to visualize population sparsity
+        # Visualizing population sparsity with 1D PCA
+        population = tf.cast(outputs[0], dtype=tf.float32)
+        population = tf.reshape(population, shape=(population.shape[0], -1))
+        s, u, v = tf.linalg.svd(population)
+        population_1d = u[:,0] * s[0]
 
+        # Histograms
         tensors = {
             "fitness": outputs[1],
+            "population_1d": population_1d,
         }
 
         return tensors
 
 
-# TODO: delete when done
 class TestingGM(GeneticModel):
     """Just for debugging."""
 
@@ -753,7 +759,7 @@ class TestingGM(GeneticModel):
 
         GeneticModel.__init__(
             self, genetic.QueensGA(
-                size=8, n_individuals=200, mutation_p=0.005))
+                size=10, n_individuals=1000, mutation_p=0.005))
 
     def compute_all(self, inputs):
         

@@ -58,21 +58,25 @@ class Trainer:
         self.saver = CheckpointSaver(self.model.keras, model_path)
         self.logger = TensorBoardLogger(self.model, log_path)
 
+        # Save on exit
+        tools.QuitWithResources.add(
+            "last_save", lambda: self.saver.save(self._step))
+
     def train(self):
         """Train."""
 
-        step = self.init_step
+        self._step = self.init_step
 
         # New run
         if not self.cont:
             self.logger.save_graph((self.batch_size, *self.frame_shape))
         # Restore
         else:
-            self.saver.load(step)
+            self.saver.load(self._step)
 
             # Initial valuation
-            self.valuate(step)
-            step += 1
+            self.valuate()
+            self._step += 1
 
         # Training loop
         print("> Training")
@@ -85,14 +89,14 @@ class Trainer:
                 outputs = self.train_step()
 
             # Logs and savings
-            relative_step = step - self.init_step
+            relative_step = self._step - self.init_step
             if relative_step % self.log_frequency == 0:
-                metrics = self.valuate(step, outputs)
-                print("Step ", step, ", ", metrics, sep="", end="          \r")
+                metrics = self.valuate(outputs)
+                print("Step ", self._step, ", ", metrics, sep="", end="          \r")
             if relative_step % self.save_frequency == 0 and relative_step > 0:
-                self.saver.save(step)
+                self.saver.save(self._step)
 
-            step += 1
+            self._step += 1
 
     @tf.function
     def train_step(self):
@@ -117,12 +121,11 @@ class Trainer:
 
         return outputs
 
-    def valuate(self, step, outputs=None):
+    def valuate(self, outputs=None):
         """Compute the metrics on one batch and save a log.
 
         When 'outputs' is not given, it runs the model to compute the metrics.
 
-        :param step: current step.
         :param outputs: (optional) outputs returned by Model.compute_all.
         :return: the saved quantities (metrics and loss)
         """
@@ -139,16 +142,16 @@ class Trainer:
         if outputs["loss"] is not None:
             metrics["loss"] = outputs["loss"]
         metrics["learning_rate"] = self.learning_rate if not self.decay_rate \
-            else self.learning_rate(step)
-        self.logger.save_scalars(step, metrics)
+            else self.learning_rate(self._step)
+        self.logger.save_scalars(self._step, metrics)
 
         # Log images
         images = self.model.images(outputs["outputs"])
-        self.logger.save_images(step, images)
+        self.logger.save_images(self._step, images)
 
         # Log histograms
         histograms = self.model.histograms(outputs["outputs"])
-        self.logger.save_histogram(step, histograms)
+        self.logger.save_histogram(self._step, histograms)
 
         # Transform tensors to scalars for nice logs
         metrics = {
