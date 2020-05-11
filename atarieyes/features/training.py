@@ -83,7 +83,10 @@ class Trainer:
         while True:
 
             # Do
-            outputs = self.train_step()
+            if self.model.train_step:
+                outputs = self.model.train_step()
+            else:
+                outputs = self.train_step()
 
             # Logs and savings
             relative_step = step - self.init_step

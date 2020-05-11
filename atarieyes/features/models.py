@@ -20,14 +20,19 @@ class Model(ABC2):
     The `keras` attribute is a keras model.
     Some models require a non-standard training step. These can manually
     compute the gradient to be applied, inside the compute_all function.
-    The `computed_gradient` attribute indicates this behaviour.
+    The `computed_gradient` must be set to True, in this case.
+    If a completely different training step is necessary (not gradient-based),
+    one can define it in a method called `train_step`. Otherwise, in __init__,
+    we should set self.train_step to False. Train_step() must be compatible
+    with Trainer.train_step().
     """
 
     # This is the keras model
     keras = AbstractAttribute()
 
-    # Custom training? bool
+    # Custom training?
     computed_gradient = AbstractAttribute()
+    train_step = AbstractAttribute()
 
     @abstractmethod
     def predict(self, inputs):
@@ -100,6 +105,7 @@ class FrameAutoencoder(Model):
         # Store
         self.keras = model
         self.computed_gradient = False
+        self.train_step = False
 
     def predict(self, inputs):
         """Make predictions."""
@@ -220,6 +226,7 @@ class BinaryRBM(Model):
         # Save
         self.keras = model
         self.computed_gradient = True
+        self.train_step = False
 
     def compute_all(self, inputs):
         """Compute all tensors."""
@@ -603,6 +610,7 @@ class LocalFluent(Model):
         # Save
         self.keras = model
         self.computed_gradient = True
+        self.train_step = False
 
     def compute_all(self, inputs):
         """Compute all tensors."""
