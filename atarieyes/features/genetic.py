@@ -64,7 +64,6 @@ class GeneticAlgorithm(ABC2):
         """Compute the fitness value (euristic score) for each individual.
 
         Values (0, +inf) are mapped in probabilities (0, 1).
-        Decorate this with tf.function because it may be called on its own.
 
         :param population: the list of individuals
         :return: a list of float positive fitness values
@@ -189,17 +188,33 @@ class GeneticAlgorithm(ABC2):
 
         return pair
 
-    @tf.function
-    def train_step(self):
-        """One training step."""
+    def compute_train_step(self, population, fitness):
+        """Computations of the training step.
 
-        # Compute
-        population = self.reproduce(self.population, self.fitness)
+        :param population: list of individuals
+        :param fitness: their computed fitness value
+        :return: (new_population, new_fitness)
+        """
+
+        population = self.reproduce(population, fitness)
         population = self.crossover(population)
         population = self.mutate(population)
         fitness = self.compute_fitness(population)
 
-        # Store for later
+        return population, fitness
+
+    @tf.function
+    def train_step(self):
+        """One training step.
+
+        Graph execution of the ops defined above.
+        """
+
+        # Compute new
+        population, fitness = self.compute_train_step(
+            self.population, self.fitness)
+
+        # Store
         self.population.assign(population)
         self.fitness.assign(fitness)
 
@@ -275,7 +290,6 @@ class QueensGA(GeneticAlgorithm):
         sampled = tf.random.uniform((n, 1), 0, self._size, dtype=tf.int32)
         return sampled
 
-    @tf.function
     def compute_fitness(self, population):
         """Number of non-attacking queens."""
 

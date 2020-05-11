@@ -8,6 +8,7 @@ import tensorflow as tf
 from atarieyes import layers
 from atarieyes.layers import BaseLayer, make_layer
 from atarieyes.tools import ABC2, AbstractAttribute
+from atarieyes.features.genetic import GeneticAlgorithm
 
 
 class Model(ABC2):
@@ -651,3 +652,94 @@ class LocalFluent(Model):
         """Tensors to visualize."""
 
         return self.rbm.histograms(outputs)
+
+
+class GeneticModel(Model):
+    """Bridge between genetic algorithms and standard NN models.
+
+    A GeneticAlgorithm is not a I/O Model. This class is only used to fit
+    the algorithm into the same training loop, with merics.
+    This model represents the training procedure, not the individuals.
+    """
+
+    def __init__(self, ga):
+        """Initialize.
+
+        :param ga: a genetic.GeneticAlgorithm instance
+        """
+
+        # Check
+        if not isinstance(ga, GeneticAlgorithm):
+            raise TypeError("Not a GeneticAlgorithm instance")
+
+        # Store
+        self.ga = ga
+
+        # Keras model
+        keras_block = self.GALayer(ga)
+        pop_shape, pop_dtype = ga.population.shape, ga.population.dtype
+        inputs = (
+            tf.keras.Input(shape=pop_shape[1:], batch_size=pop_shape[0],
+                dtype=pop_dtype, name="population"),
+            tf.keras.Input(shape=[], batch_size=pop_shape[0], name="fitness"),
+        )
+        ret = keras_block(inputs)
+
+        model = tf.keras.Model(
+            inputs=inputs, outputs=ret, name="GeneticAlgorithm")
+        model.summary()
+
+        # Save
+        self.keras = model
+        self.computed_gradient = False
+        self.train_step = False    # TODO: define
+
+    class GALayer(BaseLayer):
+        """Keras wrapper around genetic algorithms."""
+
+        def __init__(self, ga):
+
+            BaseLayer.__init__(self)
+            self._vars = [ga.population, ga.fitness]
+            self._forward = ga.compute_train_step
+            self.built = True
+
+        def call(self, inputs):
+
+            return self._forward(*inputs)
+
+    def predict(self, inputs):
+        """Make a prediction with the model."""
+
+        raise NotImplementedError(
+            "A generic GeneticAlgorithm is not a I/O model")
+
+    def compute_all(self, inputs):
+        """Nothing to compute. Just show the training graph."""
+
+        population, fitness = self.ga.compute_train_step(*inputs)
+
+        # Ret
+        ret = dict(
+            outputs=[population, fitness], 
+            loss=None,
+            metrics={},
+            gradients=None,
+        )
+        return ret
+
+    def images(self, outputs):
+        """Returns a set of images to visualize."""
+
+        return {}
+
+    def histograms(self, outputs):
+        """Returns a set of tensors to visualize as histograms."""
+
+        # TODO: how to visualize population sparsity
+
+        tensors = {
+            "fitness": outputs[1],
+        }
+
+        return tensors
