@@ -8,9 +8,7 @@ Agent:
 
 Features:
 	Todo next:
-		- Write GA for some solvable problem
 		- Create a Model interface for GA with metrics and custom training
-		- Check that everything works on the simpler problem
 		- Add flloat to dependecy files
 		- Add fluents to regions
 	Todo later/maybe:
@@ -21,3 +19,5 @@ Done:
 	- Simple autoencoder
 	- Atari Breakout Player
 	- Collected frames from trained player or during training
+	- RBM
+	- GA
