@@ -1,4 +1,4 @@
-# Inside the server, I'll use docker, instead of pipenv.
+# Inside the server, I'll use docker, instead of a virtual environment.
 
 # This image is just for development:
 # I'm not copying the source files, because I expect
@@ -30,7 +30,7 @@ RUN apt-get -y install libsm6 libxrender-dev
 # Basics
 RUN pip3 --no-cache-dir install -U wheel setuptools pip
 # [dev-packages]
-RUN pip3 --no-cache-dir install ipython flake8 pipenv-setup
+RUN pip3 --no-cache-dir install ipython flake8
 # [packages] (tensorflow is already there)
 RUN pip3 --no-cache-dir install opencv-python numpy gym[atari]
 RUN pip3 --no-cache-dir install -e git+https://github.com/cipollone/keras-rl.git@tf2#egg=keras-rl  # should be @972e944
