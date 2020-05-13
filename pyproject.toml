@@ -18,6 +18,7 @@ numpy = "^1.18.4"
 opencv-python = "^4.2.0"
 gym = {version = "^0.17.2", extras = ["atari"]}
 tensorflow = "2.1"
+tensorflow-estimator = "2.1"
 keras-rl = {git = "https://github.com/cipollone/keras-rl.git", rev = "tf2"}
 
 [tool.poetry.dev-dependencies]

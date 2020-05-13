@@ -1,8 +1,8 @@
 # Inside the server, I'll use docker, instead of a virtual environment.
-
 # This image is just for development:
-# I'm not copying the source files, because I expect
-# a bind mount somewere inside the container.
+#   I'm not copying the source files nor installing the python dependencies
+#   because I expect a bind mount on the home. Docker is only used for a
+#   proper Tensorflow installation.
 
 FROM tensorflow/tensorflow:2.1.0-gpu-py3
 
@@ -13,31 +13,25 @@ RUN groupadd ubuntu && \
 useradd -g ubuntu -d /home/ubuntu ubuntu && \
 chown ubuntu:ubuntu /home/ubuntu
 ENV HOME=/home/ubuntu
+ENV SHELL=/bin/bash
 
 WORKDIR /home/ubuntu/
 
-# Sw
+# Apt
 RUN apt-get -y update && \
-apt-get -y upgrade
-
-# Project dependencies
+apt-get -y upgrade && \
+apt-get -y autoremove
 
 # Basics
-RUN apt-get -y install python3-pip bash-completion git tmux
-# Opencv
+RUN apt-get -y install bash-completion git tmux \
+	python3-pip python3-venv
+# Opencv (project dependency)
 RUN apt-get -y install libsm6 libxrender-dev
 
-# Basics
-RUN pip3 --no-cache-dir install -U wheel setuptools pip
-# [dev-packages]
-RUN pip3 --no-cache-dir install ipython flake8
-# [packages] (tensorflow is already there)
-RUN pip3 --no-cache-dir install opencv-python numpy gym[atari]
-RUN pip3 --no-cache-dir install -e git+https://github.com/cipollone/keras-rl.git@tf2#egg=keras-rl  # should be @972e944
+# Python tools
+RUN pip3 install --no-cache-dir -U wheel setuptools pip
 
 # Go
 USER ubuntu
 
-ENV PATH="/home/ubuntu/bin:/home/ubuntu/.local/bin:$PATH"
-
-ENTRYPOINT ["bash"]
+ENTRYPOINT ["bash", "-l"]
