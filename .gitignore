@@ -7,6 +7,7 @@
 ## Packaging
 *.egg-info/
 /docker/src/
+/dist/
 
 ## Linux
 *~

@@ -11,6 +11,9 @@ classifiers = [
 	"Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Intended Audience :: Developers",
 ]
+exclude = [
+	"docker/*", ".vimrc", ".ycm_extra_conf.py", "notes.txt", "todo.txt",
+]
 
 [tool.poetry.dependencies]
 python = "^3.7"
