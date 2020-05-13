@@ -8,9 +8,14 @@ Agent:
 
 Features:
 	Todo next:
-		- check poetry usage and sync setup.py
+		- use poetry to install dependencies in docker (withoud virtual env)
+		- poetry scripts, built Tensorflow
+		- Read pyproject.toml fields
+		- sync setup.py and docker
 		- add flloat
+		- sync setup.py and docker
 		- and version minor update
+		- flake8
 		- New Genetic Algorithm for boolean rules
 	Todo later/maybe:
 

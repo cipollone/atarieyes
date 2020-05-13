@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "atarieyes"
-version = "0.0.5"
+version = "0.0.6"
 description = "Guided RL on the Atari games with features extraction"
 authors = ["Roberto Cipollone <cipollone.rt@gmail.com>"]
 readme = "README.md"
@@ -14,11 +14,11 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.7"
-opencv-python = "*"
-numpy = "*"
-gym = {version = "*", extras = ["atari"]}
+numpy = "^1.18.4"
+opencv-python = "^4.2.0"
+gym = {version = "^0.17.2", extras = ["atari"]}
 tensorflow = "2.1"
-keras-rl = { git = "https://github.com/cipollone/keras-rl.git", branch = "tf2" }
+keras-rl = {git = "https://github.com/cipollone/keras-rl.git", rev = "tf2"}
 
 [tool.poetry.dev-dependencies]
 ipython = "*"
