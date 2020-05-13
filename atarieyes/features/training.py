@@ -92,7 +92,7 @@ class Trainer:
             relative_step = self._step - self.init_step
             if relative_step % self.log_frequency == 0:
                 metrics = self.valuate(outputs)
-                print("Step ", self._step, ", ", metrics, sep="", end="          \r")
+                print("Step ", self._step, ", ", metrics, sep="", end="    \r")
             if relative_step % self.save_frequency == 0 and relative_step > 0:
                 self.saver.save(self._step)
 

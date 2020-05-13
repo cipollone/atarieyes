@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "atarieyes"
+version = "0.1.0"
+description = "Guided RL on the Atari games with features extraction"
+authors = ["Roberto Cipollone <cipollone.rt@gmail.com>"]
+readme = "README.md"
+homepage = "https://github.com/cipollone/atarieyes"
+repository = "https://github.com/cipollone/atarieyes"
+keywords = ["RL", "logic", "atari", "temporal_logic"]
+classifiers = [
+	"Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Intended Audience :: Developers",
+]
+exclude = [
+	"docker/*", ".vimrc", ".ycm_extra_conf.py", "notes.txt", "todo.txt",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+numpy = "^1.18.4"
+opencv-python = "^4.2.0"
+gym = {version = "^0.17.2", extras = ["atari"]}
+tensorflow = "2.1"
+tensorflow-estimator = "2.1"
+keras-rl = {git = "https://github.com/cipollone/keras-rl.git", rev = "tf2"}
+flloat = "^0.3"
+
+[tool.poetry.dev-dependencies]
+ipython = "*"
+flake8 = "*"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
