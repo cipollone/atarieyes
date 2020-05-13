@@ -679,8 +679,10 @@ class GeneticModel(Model):
         keras_block = self.GALayer(ga)
         pop_shape, pop_dtype = ga.population.shape, ga.population.dtype
         inputs = (
-            tf.keras.Input(shape=pop_shape[1:], batch_size=pop_shape[0],
-                dtype=pop_dtype, name="population"),
+            tf.keras.Input(
+                shape=pop_shape[1:], batch_size=pop_shape[0],
+                dtype=pop_dtype, name="population"
+            ),
             tf.keras.Input(shape=[], batch_size=pop_shape[0], name="fitness"),
         )
         ret = keras_block(inputs)
@@ -722,7 +724,7 @@ class GeneticModel(Model):
 
         # Ret
         ret = dict(
-            outputs=[population, fitness], 
+            outputs=[population, fitness],
             loss=None,
             metrics=dict(mean_fitness=mean_fitness),
             gradients=None,
@@ -741,7 +743,7 @@ class GeneticModel(Model):
         population = tf.cast(outputs[0], dtype=tf.float32)
         population = tf.reshape(population, shape=(population.shape[0], -1))
         s, u, v = tf.linalg.svd(population)
-        population_1d = u[:,0] * s[0]
+        population_1d = u[:, 0] * s[0]
 
         # Histograms
         tensors = {
@@ -762,7 +764,6 @@ class TestingGM(GeneticModel):
                 size=10, n_individuals=1000, mutation_p=0.005))
 
     def compute_all(self, inputs):
-        
+
         return GeneticModel.compute_all(
             self, (self.ga.population, self.ga.fitness))
-

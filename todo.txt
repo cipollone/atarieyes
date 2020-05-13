@@ -8,9 +8,7 @@ Agent:
 
 Features:
 	Todo next:
-		- add flloat
-		- flake8
-		- and version minor update
+		- add flloat. version and update
 		- New Genetic Algorithm for boolean rules
 	Todo later/maybe:
 

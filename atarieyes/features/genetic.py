@@ -9,12 +9,12 @@ import math
 import tensorflow as tf
 
 from atarieyes.layers import make_layer
-from atarieyes.tools import ABC2, AbstractAttribute
+from atarieyes.tools import ABC2
 
 
 class GeneticAlgorithm(ABC2):
     """Top down structure of a Genetic Algorithm.
-    
+
     Values and lists are actually Tf tensors.
     'population' and 'fitness' are two variables that store the current states
     after each training step.
@@ -106,7 +106,7 @@ class GeneticAlgorithm(ABC2):
 
     def mutate(self, population):
         """Apply rare random mutations to each symbol.
-        
+
         :param population: the list of individuals
         :return: updated list of individuals
         """
@@ -316,7 +316,7 @@ class QueensGA(GeneticAlgorithm):
         """Number of non-attacking queens."""
 
         # Compute positions
-        rows = population[:,:,0]
+        rows = population[:, :, 0]
         cols = tf.tile(
             tf.expand_dims(tf.range(self._size), 0), (self.n_individuals, 1))
         diag1 = cols + rows
@@ -326,11 +326,13 @@ class QueensGA(GeneticAlgorithm):
         row_conflicts = tf.map_fn(self._count_conflicts, rows)
         diag1_conflicts = tf.map_fn(self._count_conflicts, diag1)
         diag2_conflicts = tf.map_fn(self._count_conflicts, diag2)
-        conflicts = row_conflicts + diag1_conflicts + diag2_conflicts 
+        conflicts = row_conflicts + diag1_conflicts + diag2_conflicts
 
         # Compute fitness: number of non-attacking queens
-        tf.debugging.assert_less_equal(conflicts, self._n_pairs, "Got " +
-            str(conflicts) + " conflicts for " + str(self._size) + " queens")
+        tf.debugging.assert_less_equal(
+            conflicts, self._n_pairs, "Got " + str(conflicts) +
+            " conflicts for " + str(self._size) + " queens"
+        )
         non_attacking = self._n_pairs - conflicts
 
         return tf.cast(non_attacking, tf.float32)
@@ -345,7 +347,7 @@ class QueensGA(GeneticAlgorithm):
     def have_solution(self):
         """When all queens are non_attacking."""
 
-        solutions = tf.where(self.fitness == self._n_pairs)[:,0]
+        solutions = tf.where(self.fitness == self._n_pairs)[:, 0]
         if tf.shape(solutions)[0] > 0:
             return self.population[solutions[0]]
         else:
