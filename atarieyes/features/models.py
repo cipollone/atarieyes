@@ -194,10 +194,12 @@ class BinaryRBM(Model):
 
     def __init__(
         self, *, n_visible, n_hidden, batch_size, l2_const, sparsity_const,
+        trainable=True,
     ):
         """Initialize.
 
         See BinaryRBM.BernoulliPair for Doc.
+        :param trainable: keras Layer argument
         """
 
         # Store
@@ -208,7 +210,8 @@ class BinaryRBM(Model):
         # Two layers
         self.layers = self.BernoulliPair(
             n_visible=n_visible, n_hidden=n_hidden, batch_size=batch_size,
-            l2_const=l2_const, sparsity_const=sparsity_const
+            l2_const=l2_const, sparsity_const=sparsity_const,
+            trainable=trainable,
         )
 
         # Keras model
@@ -289,8 +292,11 @@ class BinaryRBM(Model):
         units.
         """
 
+        _n_instances = 0
+
         def __init__(
             self, *, n_visible, n_hidden, batch_size, l2_const, sparsity_const,
+            **layer_kwargs,
         ):
             """Initialize.
 
@@ -300,10 +306,11 @@ class BinaryRBM(Model):
             :param l2_const: scale factor of the L2 loss on W.
             :param sparsity_const: scale factor of the sparsity promoting loss.
                 Target distribution is 10% activation for all hidden units.
+            :param layer_kwargs: base layer arguments
             """
 
             # Super
-            BaseLayer.__init__(self)
+            BaseLayer.__init__(self, **layer_kwargs)
 
             # Save options
             self.layer_options = dict(
@@ -347,13 +354,22 @@ class BinaryRBM(Model):
                 trainable=False, name="saved_v_sample")
 
             # Transform functions to layers (optional, for a nice graph)
-            self.expected_h = make_layer("Expected_h", self.expected_h)()
-            self.expected_v = make_layer("Expected_v", self.expected_v)()
-            self.sample_h = make_layer("Sample_h", self.sample_h)()
-            self.sample_v = make_layer("Sample_v", self.sample_v)()
-            self.free_energy = make_layer("FreeEnergy", self.free_energy)()
+            str_id = "_" + str(self._n_instances)
+            self.expected_h = make_layer(
+                "Expected_h" + str_id, self.expected_h)()
+            self.expected_v = make_layer(
+                "Expected_v" + str_id, self.expected_v)()
+            self.sample_h = make_layer(
+                "Sample_h" + str_id, self.sample_h)()
+            self.sample_v = make_layer(
+                "Sample_v" + str_id, self.sample_v)()
+            self.free_energy = make_layer(
+                "FreeEnergy" + str_id, self.free_energy)()
             self.compute_gradients = make_layer(
-                "ComputeGradients", self.compute_gradients)()
+                "ComputeGradients" + str_id, self.compute_gradients)()
+
+            # Counter
+            type(self)._n_instances += 1
 
             # Already built
             self.built = True
@@ -519,8 +535,11 @@ class BinaryRBM(Model):
             variables = [
                 (name[:name.find(":")] if ":" in name else name)
                 for name in variables]
-            assert len(variables) == 3, "Expected: W, bv, bh"
             gradients_vector = [gradients[var] for var in variables]
+            if self.trainable:
+                assert len(variables) == 3, "Expected: W, bv, bh"
+            else:
+                assert len(variables) == 0
 
             # Gradient metrics
             W_loss_gradient_size = tf.math.reduce_max(
@@ -544,6 +563,123 @@ class BinaryRBM(Model):
             )
 
             return gradients_vector, tensors
+
+
+class DeepBeliefNetwork(Model):
+    """A Deep belief network stacks a number of RBM.
+
+    This iterates the RBM model in a number of layers and train those in a
+    greedy manner. I use this to achieve stronger compressions.
+    """
+
+    def __init__(self, layers_spec, training_layer=0):
+        """Initialize.
+
+        :param layers_spec: (layers specification) A list of dicts, where
+            layers_spec[i] contains the init parameters for layer i.
+            The layers are BinaryRBM. Make sure that the shapes are compatible.
+        :param training_layer: the index of the layer to train.
+        """
+
+        # Store
+        self._layers_spec = layers_spec
+        self.training_layer = training_layer
+        self.input_shape = (
+            layers_spec[0]["batch_size"], layers_spec[0]["n_visible"])
+
+        # Set which layer is trainable
+        for i in range(len(self._layers_spec)):
+            self._layers_spec[i]["trainable"] = (i == self.training_layer)
+
+        # Layers
+        self.layers = []
+        for spec in self._layers_spec:
+            self.layers.append(
+                BinaryRBM(**spec)
+            )
+
+        # Keras model
+        inputs = tf.keras.Input(shape=self.input_shape[1:], dtype=tf.float32)
+        ret = self.compute_all(inputs)
+        outputs = (
+            *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
+
+        model = tf.keras.Model(
+            inputs=inputs, outputs=outputs, name="DeepBeliefNetwork")
+
+        # Let keras register the variables
+        model._saved_layers = self.layers[self.training_layer].keras
+        assert model.trainable_variables == \
+            self.layers[self.training_layer].keras.trainable_variables
+
+        # Save
+        self.keras = model
+        self.computed_gradient = True
+        self.train_step = False
+
+    def _forward(self, inputs, from_layer, to_layer):
+        """Propagates inputs for a range of layers.
+
+        The forward pass is defined by sampling on each h distribution.
+
+        :param inputs: the model input tensor.
+        :param from_layer: start of a range of layers.
+        :param to_layer: end (excluded) of a range of layers.
+        :return: output of the layer end-1
+        """
+
+        for i in range(from_layer, to_layer):
+            layer = self.layers[i]
+            inputs = layer.layers.sample_h(inputs)
+
+        return inputs
+
+    def compute_all(self, inputs):
+        """Compute all tensors.
+
+        """
+
+        # Forward
+        outputs = self._forward(inputs, 0, self.training_layer)
+
+        # Compute all for training
+        ret = self.layers[self.training_layer].compute_all(outputs)
+        outputs = self._forward(
+            outputs, self.training_layer, self.training_layer + 1)
+
+        # Forward
+        outputs = self._forward(
+            outputs, self.training_layer + 1, len(self.layers))
+
+        # Ret
+        ret["outputs"].insert(0, outputs)
+        return ret
+
+    def predict(self, inputs):
+        """Repeated layer call()."""
+
+        for layer in self.layers:
+            inputs = layer.predict(inputs)
+
+        return inputs
+
+    def images(self, outputs):
+        """Images to visualize."""
+
+        return {}
+
+    def histograms(self, outputs):
+        """Tensors to visualize."""
+
+        # Training histograms
+        training_layer = self.layers[self.training_layer]
+        training_outputs = outputs[1:]
+        tensors = training_layer.histograms(training_outputs)
+
+        # Add the model output
+        tensors["outputs/output"] = outputs[0]
+
+        return tensors
 
 
 class LocalFluent(Model):
@@ -699,9 +835,9 @@ class GeneticModel(Model):
     class GALayer(BaseLayer):
         """Keras wrapper around genetic algorithms."""
 
-        def __init__(self, ga):
+        def __init__(self, ga, **layer_kwargs):
 
-            BaseLayer.__init__(self)
+            BaseLayer.__init__(self, **layer_kwargs)
             self._vars = [ga.population, ga.fitness]
             self._forward = ga.compute_train_step
             self.built = True

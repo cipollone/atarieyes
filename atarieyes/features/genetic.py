@@ -22,6 +22,8 @@ class GeneticAlgorithm(ABC2):
     tf.function (use tf.py_function, if necessary).
     """
 
+    _n_instances = 0
+
     def __init__(self, n_individuals, mutation_p):
         """Initialize.
 
@@ -54,13 +56,17 @@ class GeneticAlgorithm(ABC2):
         self.symbol_len = self.population.shape[2]
 
         # Transform functions to layers (optional, for a nice graph)
+        str_id = "_" + str(self._n_instances)
         self.compute_fitness = make_layer(
-            "ComputeFitness", self.compute_fitness)()
+            "ComputeFitness" + str_id, self.compute_fitness)()
         self.sample_symbols = make_layer(
-            "SampleSymbols", self.sample_symbols)()
-        self.mutate = make_layer("Mutate", self.mutate)()
-        self.reproduce = make_layer("Reproduce", self.reproduce)()
-        self.crossover = make_layer("Crossover", self.crossover)()
+            "SampleSymbols" + str_id, self.sample_symbols)()
+        self.mutate = make_layer("Mutate" + str_id, self.mutate)()
+        self.reproduce = make_layer("Reproduce" + str_id, self.reproduce)()
+        self.crossover = make_layer("Crossover" + str_id, self.crossover)()
+
+        # Counter
+        self._n_instances += 1
 
     @abstractmethod
     def initial_population(self):
