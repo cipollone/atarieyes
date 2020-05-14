@@ -6,7 +6,7 @@ import gym
 import tensorflow as tf
 
 from atarieyes import layers
-from atarieyes.features import genetic
+from atarieyes.features import genetic, selector
 from atarieyes.layers import BaseLayer, make_layer
 from atarieyes.tools import ABC2, AbstractAttribute
 
@@ -572,13 +572,14 @@ class DeepBeliefNetwork(Model):
     greedy manner. I use this to achieve stronger compressions.
     """
 
-    def __init__(self, layers_spec, training_layer=0):
+    def __init__(self, layers_spec, training_layer=None):
         """Initialize.
 
         :param layers_spec: (layers specification) A list of dicts, where
             layers_spec[i] contains the init parameters for layer i.
-            The layers are BinaryRBM. Make sure that the shapes are compatible.
-        :param training_layer: the index of the layer to train.
+            The layers are BinaryRBM. Make sure that the chained layers
+            have compatible shapes.
+        :param training_layer: the index of the layer to train. Can be None.
         """
 
         # Store
@@ -589,7 +590,8 @@ class DeepBeliefNetwork(Model):
 
         # Set which layer is trainable
         for i in range(len(self._layers_spec)):
-            self._layers_spec[i]["trainable"] = (i == self.training_layer)
+            self._layers_spec[i]["trainable"] = (
+                self.training_layer is not None and i == self.training_layer)
 
         # Layers
         self.layers = []
@@ -608,9 +610,10 @@ class DeepBeliefNetwork(Model):
             inputs=inputs, outputs=outputs, name="DeepBeliefNetwork")
 
         # Let keras register the variables
-        model._saved_layers = self.layers[self.training_layer].keras
-        assert model.trainable_variables == \
-            self.layers[self.training_layer].keras.trainable_variables
+        if self.training_layer is not None:
+            model._saved_layers = self.layers[self.training_layer].keras
+            assert model.trainable_variables == \
+                self.layers[self.training_layer].keras.trainable_variables
 
         # Save
         self.keras = model
@@ -638,6 +641,12 @@ class DeepBeliefNetwork(Model):
         """Compute all tensors.
 
         """
+
+        # No training
+        if self.training_layer is None:
+            output = self._forward(inputs, 0, len(self.layers))
+            ret = dict(outputs=[output], loss=None, metrics={}, gradients=[])
+            return ret
 
         # Forward
         outputs = self._forward(inputs, 0, self.training_layer)
@@ -671,39 +680,46 @@ class DeepBeliefNetwork(Model):
     def histograms(self, outputs):
         """Tensors to visualize."""
 
+        # No training
+        if self.training_layer is None:
+            return {"outputs/dbn_output": outputs[0]}
+
         # Training histograms
         training_layer = self.layers[self.training_layer]
         training_outputs = outputs[1:]
         tensors = training_layer.histograms(training_outputs)
 
         # Add the model output
-        tensors["outputs/output"] = outputs[0]
+        tensors["outputs/dbn_output"] = outputs[0]
 
         return tensors
 
 
-class LocalFluent(Model):
+class LocalFluents(Model):
     """Model for binary local features.
 
-    A LocalFluent is a binary function of a small portion of the observation.
-    For each frame of the game, a LocalFluent has a fixed truth value which
-    can be computed from just a small portion of the image.
-    This model is composed by a RBM (and some other parts that will be added).
+    This class represent a set of binary features (aka fluents) that can
+    be evaluated from a small portion of the observation.
+    For each frame of the game, all fluents represented by this model
+    have a fixed truth value.
+
+    LocalFluents represents the fluents that can be extracted from a region
+    defined with Selector.
     """
 
     def __init__(
-        self, *, env_name, region, n_hidden, batch_size, l2_const,
-        sparsity_const, resize_pixels=500,
+        self, env_name, region, dbn_spec, training_layer, resize_pixels=500,
     ):
         """Initialize.
 
         :param env_name: a gym environment name.
         :param region: name of the selected region.
-        :param n_hidden: number of hidden/output binary units.
-        :param batch_size: fixed size of the batch.
-        :param l2_const: scale factor of the L2 loss on W.
-        :param sparsity_const: scale factor of the sparsity promoting loss.
-            Target distribution is 10% activation for all hidden units.
+        :param dbn_spec: specification of a `DeepBeliefNetwork`.
+            This is the same argument as `layers_spec` in `DeepBeliefNetwork`.
+            `n_visible` parameters are not required, because they can be
+            inferred.
+        :param training_layer: layer to train. The first layers
+            are in DBN, the last is different.
         :param resize_pixels: the input region is resized to have less than
             this number of pixels.
         """
@@ -712,6 +728,14 @@ class LocalFluent(Model):
         self._env_name = env_name
         self._region_name = region
         self._frame_shape = gym.make(env_name).observation_space.shape
+        self._dbn_spec = dbn_spec
+
+        # Read fluents for this region
+        env_data = selector.read_back(self._env_name)
+        env_data.pop("_frame")
+        assert self._region_name in env_data, "Undefined region"
+        self._fluent_definitions = env_data[self._region_name]["fluents"]
+        self._n_fluents = len(self._fluent_definitions)
 
         # Preprocessing
         self.preprocessing = layers.LocalFeaturePreprocessing(
@@ -720,16 +744,23 @@ class LocalFluent(Model):
         )
         self.flatten = tf.keras.layers.Flatten()
 
-        # Compute shape
+        # Compute shapes
         fake_input = np.zeros(shape=(1, *self._frame_shape), dtype=np.uint8)
         self._region_shape = self.preprocessing(fake_input).shape[1:]
-        n_pixels = self._region_shape.num_elements()
+        n_elements = self._region_shape.num_elements()
 
-        # RBM block
-        self.rbm = BinaryRBM(
-            n_visible=n_pixels, n_hidden=n_hidden, batch_size=batch_size,
-            l2_const=l2_const, sparsity_const=sparsity_const,
+        for spec in self._dbn_spec:
+            spec["n_visible"] = n_elements
+            n_elements = spec["n_hidden"]
+
+        # DeepBeliefNetwork
+        assert 0 <= training_layer < len(dbn_spec) + 1
+        self.dbn = DeepBeliefNetwork(
+            dbn_spec, training_layer=training_layer
+            if training_layer < len(dbn_spec) else None
         )
+
+        # NOTE: last layer is still missing because it should not be an rbm
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
@@ -738,11 +769,10 @@ class LocalFluent(Model):
             *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
 
         model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name="LocalFluentModel")
+            inputs=inputs, outputs=outputs, name="LocalFluents")
 
-        # Let keras register the variables
-        model._saved_layers = self.rbm.keras
-        assert model.trainable_variables == self.rbm.keras.trainable_variables
+        # TODO: let keras register the variables
+        # TODO: check graph
 
         # Save
         self.keras = model
@@ -755,39 +785,51 @@ class LocalFluent(Model):
         # Compute all
         out = self.preprocessing(inputs)
         out = self.flatten(out)
-        out = self.rbm.compute_all(out)
+        ret = self.dbn.compute_all(out)
 
-        # Last two outputs are images
-        expected_v = out["outputs"][1]
-        out["outputs"][1] = tf.reshape(expected_v, [-1, *self._region_shape])
-        input_v = out["outputs"][2]
-        out["outputs"][2] = tf.reshape(input_v, [-1, *self._region_shape])
-
-        return out
+        return ret
 
     def predict(self, inputs):
-        """Predict the most probable value of the fluent.
-
-        :param inputs: one batch.
-        :return: batch of zeros and ones.
-        """
-
-        # Maximum likelihood
-        out = self.preprocessing(inputs)
-        out = self.flatten(out)
-        ml_h = self.rbm.predict(out)
-
-        return ml_h
+        # TODO:
+        pass
 
     def images(self, outputs):
-        """Images to visualize."""
-
-        return {"region/expected": outputs[1], "region/input": outputs[2]}
+        # TODO:
+        pass
 
     def histograms(self, outputs):
-        """Tensors to visualize."""
+        # TODO
+        pass
 
-        return self.rbm.histograms(outputs)
+    # TODO: remove
+
+    #    # Let keras register the variables
+    #    model._saved_layers = self.rbm.keras
+    #    assert model.trainable_variables == self.rbm.keras.trainable_variables
+
+    #def predict(self, inputs):
+    #    """Predict the most probable value of the fluent.
+
+    #    :param inputs: one batch.
+    #    :return: batch of zeros and ones.
+    #    """
+
+    #    # Maximum likelihood
+    #    out = self.preprocessing(inputs)
+    #    out = self.flatten(out)
+    #    ml_h = self.rbm.predict(out)
+
+    #    return ml_h
+
+    #def images(self, outputs):
+    #    """Images to visualize."""
+
+    #    return {"region/expected": outputs[1], "region/input": outputs[2]}
+
+    #def histograms(self, outputs):
+    #    """Tensors to visualize."""
+
+    #    return self.rbm.histograms(outputs)
 
 
 class GeneticModel(Model):
