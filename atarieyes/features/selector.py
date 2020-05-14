@@ -28,7 +28,7 @@ import numpy as np
 import cv2 as cv
 
 # Directory where selections are saved
-info_dir = "envs_data"
+info_dir = "definitions"
 
 
 def selection_tool(args):
@@ -101,3 +101,22 @@ def selection_tool(args):
     os.makedirs(info_dir, exist_ok=True)
     with open(env_file, "w") as f:
         json.dump(data, f, indent=4, sort_keys=True)
+
+
+def read_back(env_name):
+    """Read the json file for the given environment.
+
+    :param env_name: name of a gym environment.
+    :return: the loaded json structure.
+    :raises: ValueError: if unknown env.
+    """
+
+    env_json = os.path.join(info_dir, env_name + ".json")
+    if not os.path.exists(env_json):
+        raise ValueError(
+            "No definitions for " + str(env_name) + ". "
+            "Run:\n  atarieyes features select -e " + str(env_name))
+
+    with open(env_json) as f:
+        env_data = json.load(f)
+    return env_data

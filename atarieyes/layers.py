@@ -289,20 +289,9 @@ class CropToEnv(BaseLayer):
         """
 
         # Load the selection
-        env_json = os.path.join(selector.info_dir, env_name + ".json")
-        if not os.path.exists(env_json):
-            box = None
-        else:
-            with open(env_json) as f:
-                env_data = json.load(f)
-            box = env_data[region] if region == "_frame" \
-                else env_data[region]["region"]
-
-        # Check
-        if not box:
-            raise ValueError(
-                "No box defined for " + str(env_name) + ". "
-                "Run:\n  atarieyes features select -e " + str(env_name))
+        env_data = selector.read_back(env_name)
+        box = env_data[region] if region == "_frame" \
+            else env_data[region]["region"]
 
         # Set
         self._box_slice_w = slice(box[0], box[2])

@@ -8,9 +8,10 @@ Agent:
 
 Features:
 	Todo next:
+		- Rename envs_data. Use that to define fluents.
+		- LocalFluents contain one DBN only
 		- New class Fluents that is connected with main and trainer
 			Fluents contain one or more LocalFluents, as indicated by envs_data
-		- LocalFluents contain one DBN only
 		- New Genetic Algorithm for boolean rules
 	Todo later/maybe:
 
