@@ -729,6 +729,7 @@ class LocalFluents(Model):
         self._region_name = region
         self._frame_shape = gym.make(env_name).observation_space.shape
         self._dbn_spec = dbn_spec
+        self._training_layer = training_layer
 
         # Read fluents for this region
         env_data = selector.read_back(self._env_name)
@@ -754,13 +755,15 @@ class LocalFluents(Model):
             n_elements = spec["n_hidden"]
 
         # DeepBeliefNetwork
-        assert 0 <= training_layer < len(dbn_spec) + 1
+        assert 0 <= self._training_layer < len(dbn_spec) + 1
         self.dbn = DeepBeliefNetwork(
-            dbn_spec, training_layer=training_layer
-            if training_layer < len(dbn_spec) else None
+            dbn_spec, training_layer=self._training_layer
+            if self._training_layer < len(dbn_spec) else None
         )
 
         # NOTE: last layer is still missing because it should not be an rbm
+        #  That should be added in self, compute_all, predict,
+        #  assert trainable vars and histograms
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
@@ -771,8 +774,9 @@ class LocalFluents(Model):
         model = tf.keras.Model(
             inputs=inputs, outputs=outputs, name="LocalFluents")
 
-        # TODO: let keras register the variables
-        # TODO: check graph
+        # Let keras register the variables
+        model._saved_layers = self.dbn.keras
+        assert model.trainable_variables == self.dbn.keras.trainable_variables
 
         # Save
         self.keras = model
@@ -790,46 +794,36 @@ class LocalFluents(Model):
         return ret
 
     def predict(self, inputs):
-        # TODO:
-        pass
+        """A prediction with the model.
+
+        :param inputs: one batch.
+        :return: batch of values for all fluents.
+        """
+
+        out = self.preprocessing(inputs)
+        out = self.flatten(out)
+        out = self.dbn.predict(out)
+
+        return out
 
     def images(self, outputs):
-        # TODO:
-        pass
+        """Images to visualize."""
+
+        # Only the first layer can be visualized
+        if self._training_layer == 0:
+
+            expected = tf.reshape(outputs[2], self._region_shape)
+            inputs = tf.reshape(outputs[3], self._region_shape)
+            return {"region/expected": expected, "region/input": inputs}
+        
+        else:
+            return {}
+
 
     def histograms(self, outputs):
-        # TODO
-        pass
+        """Tensors to visualize."""
 
-    # TODO: remove
-
-    #    # Let keras register the variables
-    #    model._saved_layers = self.rbm.keras
-    #    assert model.trainable_variables == self.rbm.keras.trainable_variables
-
-    #def predict(self, inputs):
-    #    """Predict the most probable value of the fluent.
-
-    #    :param inputs: one batch.
-    #    :return: batch of zeros and ones.
-    #    """
-
-    #    # Maximum likelihood
-    #    out = self.preprocessing(inputs)
-    #    out = self.flatten(out)
-    #    ml_h = self.rbm.predict(out)
-
-    #    return ml_h
-
-    #def images(self, outputs):
-    #    """Images to visualize."""
-
-    #    return {"region/expected": outputs[1], "region/input": outputs[2]}
-
-    #def histograms(self, outputs):
-    #    """Tensors to visualize."""
-
-    #    return self.rbm.histograms(outputs)
+        return self.dbn.histograms(outputs)
 
 
 class GeneticModel(Model):
