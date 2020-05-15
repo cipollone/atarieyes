@@ -17,18 +17,5 @@
       152,
       93
     ]
-  },
-  "blue": {
-    "abbrev": "b",
-    "fluents": {
-			"b_full": "true",
-			"b_emtpy": "true"
-		},
-    "region": [
-      8,
-      87,
-      152,
-      93
-    ]
   }
 }

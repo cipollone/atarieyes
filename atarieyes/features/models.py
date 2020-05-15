@@ -695,16 +695,15 @@ class DeepBeliefNetwork(Model):
         return tensors
 
 
-class LocalFluents(Model):
+class LocalFeatures(Model):
     """Model for binary local features.
 
-    This class represent a set of binary features (aka fluents) that can
-    be evaluated from a small portion of the observation.
-    For each frame of the game, all fluents represented by this model
-    have a fixed truth value.
+    Takes a small portion of the observation (a "region") and encodes it
+    in a binary vector. Other models can take this output and use it to
+    evaluate the fluents defined in this region.
 
-    LocalFluents represents the fluents that can be extracted from a region
-    defined with Selector.
+    Regions and fluents are defined in environment json file.
+    See selector module.
     """
 
     _n_instances = 0
@@ -720,8 +719,7 @@ class LocalFluents(Model):
             This is the same argument as `layers_spec` in `DeepBeliefNetwork`.
             `n_visible` parameters are not required, because they can be
             inferred.
-        :param training_layer: layer to train. The first layers
-            are in DBN, the last is different. Can be None.
+        :param training_layer: index of the layer to train. Can be None.
         :param resize_pixels: the input region is resized to have less than
             this number of pixels.
         """
@@ -733,16 +731,9 @@ class LocalFluents(Model):
         self._dbn_spec = dbn_spec
         self._training_layer = training_layer
 
-        # Read fluents for this region
-        env_data = selector.read_back(self._env_name)
-        env_data.pop("_frame")
-        assert self._region_name in env_data, "Undefined region"
-        self._fluent_definitions = env_data[self._region_name]["fluents"]
-        self._n_fluents = len(self._fluent_definitions)
-
         # Preprocessing
         self.preprocessing = layers.LocalFeaturePreprocessing(
-            env_name=env_name, region=region,
+            env_name=env_name, region=self._region_name,
             threshold=0.2, max_pixels=resize_pixels,
         )
         self.flatten = tf.keras.layers.Flatten()
@@ -758,15 +749,8 @@ class LocalFluents(Model):
 
         # DeepBeliefNetwork
         if self._training_layer is not None:
-            assert 0 <= self._training_layer < len(dbn_spec) + 1
-        self.dbn = DeepBeliefNetwork(
-            dbn_spec, training_layer=None if self._training_layer is None or
-            self._training_layer >= len(dbn_spec) else self._training_layer
-        )
-
-        # NOTE: last layer is still missing because it should not be an rbm
-        #  That should be added in self, compute_all, predict,
-        #  assert trainable vars and histograms
+            assert 0 <= self._training_layer < len(dbn_spec)
+        self.dbn = DeepBeliefNetwork(dbn_spec, training_layer)
 
         # Transform functions to layers (optional, for a nice graph)
         str_id = "_" + str(self._n_instances)
@@ -782,7 +766,7 @@ class LocalFluents(Model):
             *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
 
         model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name="LocalFluents")
+            inputs=inputs, outputs=outputs, name="LocalFeatures")
 
         # Let keras register the variables
         model._saved_layers = self.dbn.keras
@@ -822,8 +806,8 @@ class LocalFluents(Model):
         # Only the first layer can be visualized
         if self._training_layer == 0:
 
-            expected = tf.reshape(outputs[2], self._region_shape)
-            inputs = tf.reshape(outputs[3], self._region_shape)
+            expected = tf.reshape(outputs[2], (-1, *self._region_shape))
+            inputs = tf.reshape(outputs[3], (-1, *self._region_shape))
             return {"region/expected": expected, "region/input": inputs}
 
         else:
@@ -836,19 +820,21 @@ class LocalFluents(Model):
 
 
 class Fluents(Model):
-    """All binary features for an Atari games.
+    """Model for binary local features.
 
     This class is the outer Model: it represents all binary features (aka
-    fluents) found in a single Atari game.
-    Each environment has all fluents defined in its json file: they are
-    grouped in local features.
+    fluents) defined in each Atari game.  Each environment has all fluents
+    defined in its json file: they are grouped in regions.
+
+    The first part is composed of a set of LocalFeatures, one for each region.
+    Then, last layer evaluates all fluents.
     """
 
     def __init__(self, env_name, dbn_spec, training_region, training_layer):
         """Initialize.
 
         :param env_name: a gym environment name.
-        :param dbn_spec: see LocalFluents `dbn_spec`; this is used for all.
+        :param dbn_spec: see LocalFeatures `dbn_spec`; this is used for all.
         :param training_region: name of the region to train.
         :param training_layer: index of the region layer to train.
         """
@@ -882,15 +868,17 @@ class Fluents(Model):
                         '"b_fluent0"')
                 self.fluents[fluent_name] = region["fluents"][fluent_name]
 
-        # One model for each region
-        self.local_fluents = [
-            LocalFluents(
+        # One encoding for each region
+        self.local_features = [
+            LocalFeatures(
                 env_name=self._env_name, region=region,
                 dbn_spec=self._dbn_spec, training_layer=(
                     self._training_layer if self._training_region == region
                     else None),
             ) for region in self._region_names
         ]
+
+        # NOTE: last layer is still missing because it should be different.
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
@@ -902,9 +890,9 @@ class Fluents(Model):
             inputs=inputs, outputs=outputs, name="Fluents")
 
         # Let keras register the variables
-        model._saved_layers = [m.keras for m in self.local_fluents]
+        model._saved_layers = [m.keras for m in self.local_features]
         assert model.trainable_variables == \
-            self.local_fluents[self._training_i].keras.trainable_variables
+            self.local_features[self._training_i].keras.trainable_variables
 
         # Save
         self.keras = model
@@ -918,7 +906,7 @@ class Fluents(Model):
         prediction = self.predict(inputs)
 
         # Then training data follow
-        ret = self.local_fluents[self._training_i].compute_all(inputs)
+        ret = self.local_features[self._training_i].compute_all(inputs)
 
         # Merge
         ret["outputs"].insert(0, prediction)
@@ -931,7 +919,8 @@ class Fluents(Model):
         :return: batch of values for all fluents.
         """
 
-        predictions = [region.predict(inputs) for region in self.local_fluents]
+        predictions = [
+            region.predict(inputs) for region in self.local_features]
         predictions = tf.concat(predictions, axis=1)
         return predictions
 
@@ -943,7 +932,7 @@ class Fluents(Model):
 
         # Collect all images and add a namescope
         all_imgs = {}
-        for region in self.local_fluents:
+        for region in self.local_features:
             imgs = region.images(outputs)
             imgs = {
                 region._region_name + "/" + name: img
@@ -960,7 +949,7 @@ class Fluents(Model):
 
         # Collect all histograms and add a namescope
         all_hists = {}
-        for region in self.local_fluents:
+        for region in self.local_features:
             hists = region.histograms(outputs)
             hists = {
                 region._region_name + "/" + name: hist

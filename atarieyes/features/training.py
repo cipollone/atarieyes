@@ -23,7 +23,7 @@ class Trainer:
         # Init
         self.log_frequency = args.log_frequency
         self.save_frequency = args.save_frequency
-        self.cont = bool(args.cont)
+        self.cont = (args.cont is not None)
         self.init_step = args.cont if self.cont else 0
         self.learning_rate = args.learning_rate
         self.decay_rate = args.decay_rate

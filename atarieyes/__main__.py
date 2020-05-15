@@ -21,7 +21,7 @@ def main():
         l2_const=0.1,
         sparsity_const=0.0,
         shuffle=10000,
-        network_size=[50, 30],
+        network_size=[50, 20],
     )
     agent_defaults = dict(
         memory_limit=1000000,
