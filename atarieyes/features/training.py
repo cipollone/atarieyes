@@ -23,7 +23,7 @@ class Trainer:
         # Init
         self.log_frequency = args.log_frequency
         self.save_frequency = args.save_frequency
-        self.cont = bool(args.cont)
+        self.cont = (args.cont is not None)
         self.init_step = args.cont if self.cont else 0
         self.learning_rate = args.learning_rate
         self.decay_rate = args.decay_rate
@@ -44,7 +44,16 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.TestingGM()
+        network_spec = [dict(
+                n_hidden=units, batch_size=args.batch_size,
+                l2_const=args.l2_const, sparsity_const=args.sparsity_const,
+            ) for units in args.network_size
+        ]
+        self.model = models.Fluents(
+            env_name=args.env, dbn_spec=network_spec,
+            training_region=args.train_region_layer[0],
+            training_layer=int(args.train_region_layer[1]),
+        )
 
         # Optimization
         if self.decay_rate:
@@ -171,7 +180,7 @@ class Trainer:
 class CheckpointSaver:
     """Save weights and restore."""
 
-    save_format = "h5"
+    save_format = "tf"
 
     def __init__(self, model, path):
         """Initialize.
