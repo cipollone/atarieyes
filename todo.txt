@@ -8,9 +8,8 @@ Agent:
 
 Features:
 	Todo next:
-		- New class Fluents that is connected with main and trainer
-			Fluents contain one or more LocalFluents, as indicated by envs_data
-			flake8
+		- Resume training of the previous RBN, just for testing.
+		- Train the second RBN of the DBN.
 		- New Genetic Algorithm for boolean rules
 	Todo later/maybe:
 

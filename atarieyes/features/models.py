@@ -707,6 +707,8 @@ class LocalFluents(Model):
     defined with Selector.
     """
 
+    _n_instances = 0
+
     def __init__(
         self, env_name, region, dbn_spec, training_layer, resize_pixels=500,
     ):
@@ -765,6 +767,13 @@ class LocalFluents(Model):
         # NOTE: last layer is still missing because it should not be an rbm
         #  That should be added in self, compute_all, predict,
         #  assert trainable vars and histograms
+
+        # Transform functions to layers (optional, for a nice graph)
+        str_id = "_" + str(self._n_instances)
+        self.predict = make_layer("LF_Predict" + str_id, self.predict)()
+
+        # Counter
+        type(self)._n_instances += 1
 
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
@@ -855,7 +864,11 @@ class Fluents(Model):
         env_data = selector.read_back(self._env_name)
         env_data.pop("_frame")
         self._region_names = list(env_data.keys())
-        self._training_i = self._region_names.index(self._training_region)
+        try:
+            self._training_i = self._region_names.index(self._training_region)
+        except ValueError:
+            raise ValueError(str(self._training_region) +
+                " not in " + str(self._region_names))
 
         # Collect fluents and their specification
         self.fluents = OrderedDict()
@@ -869,10 +882,6 @@ class Fluents(Model):
                         '"b_fluent0"')
                 self.fluents[fluent_name] = region["fluents"][fluent_name]
 
-        # All outputs toghether must the a prediction for all fluents
-        # TODO: last output of dbn_spec can't be the same for all
-        # TODO: last layer should depend on the number of fluents
-
         # One model for each region
         self.local_fluents = [
             LocalFluents(
@@ -883,7 +892,6 @@ class Fluents(Model):
             ) for region in self._region_names
         ]
 
-        # TODO: graph?
         # Keras model
         inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
         ret = self.compute_all(inputs)

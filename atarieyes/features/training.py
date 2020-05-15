@@ -44,7 +44,16 @@ class Trainer:
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.TestingGM()
+        network_spec = [dict(
+                n_hidden=units, batch_size=args.batch_size,
+                l2_const=args.l2_const, sparsity_const=args.sparsity_const,
+            ) for units in args.network_size
+        ]
+        self.model = models.Fluents(
+            env_name=args.env, dbn_spec=network_spec,
+            training_region=args.train_region_layer[0],
+            training_layer=int(args.train_region_layer[1]),
+        )
 
         # Optimization
         if self.decay_rate:

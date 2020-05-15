@@ -18,10 +18,10 @@ def main():
         batch_size=50,
         learning_rate=1e-3,
         decay_steps=50,
-        n_hidden=100,
         l2_const=0.1,
         sparsity_const=0.0,
         shuffle=10000,
+        network_size=[50, 30],
     )
     agent_defaults = dict(
         memory_limit=1000000,
@@ -179,8 +179,6 @@ def main():
         "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
     features_train.add_argument(
-        "--render", action="store_true", help="Render while training")
-    features_train.add_argument(
         "-b", "--batch", type=int, default=features_defaults["batch_size"],
         dest="batch_size", help="Training batch size")
     features_train.add_argument(
@@ -207,10 +205,6 @@ def main():
         "--decay-rate", action="store_true", dest="decay_rate",
         help="Use a decaying learning rate.")
     features_train.add_argument(
-        "--n-hidden", type=int, dest="n_hidden",
-        default=features_defaults["n_hidden"],
-        help="Number of hidden units (if applicable)")
-    features_train.add_argument(
         "--l2-const", type=float, dest="l2_const",
         default=features_defaults["l2_const"],
         help="Scale factor of the L2 loss")
@@ -221,6 +215,15 @@ def main():
     features_train.add_argument(
         "--shuffle", type=int, default=features_defaults["shuffle"],
         help="Size of the shuffle buffer.")
+    features_train.add_argument(
+        "--network", type=int, nargs="+", metavar="N_UNITS",
+        dest="network_size", default=features_defaults["network_size"],
+        help="Number of hidden units, one for each layer (last omitted).")
+    features_train.add_argument(
+        "--train", type=str, nargs=2, metavar=("REGION", "LAYER"),
+        required=True, dest="train_region_layer",
+        help="Choose which model to train. Models are organized"
+        " in region (a name) and layers (an int)")
 
     # Feature selection op
     feature_select = features_op.add_parser(
