@@ -171,7 +171,7 @@ class Trainer:
 class CheckpointSaver:
     """Save weights and restore."""
 
-    save_format = "h5"
+    save_format = "tf"
 
     def __init__(self, model, path):
         """Initialize.

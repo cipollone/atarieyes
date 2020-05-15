@@ -7,9 +7,25 @@
   ],
   "blue_right": {
     "abbrev": "br",
-    "fluents": {},
+    "fluents": {
+			"br_full": "true",
+			"br_empty": "true"
+		},
     "region": [
       32,
+      87,
+      152,
+      93
+    ]
+  },
+  "blue": {
+    "abbrev": "b",
+    "fluents": {
+			"b_full": "true",
+			"b_emtpy": "true"
+		},
+    "region": [
+      8,
       87,
       152,
       93

@@ -1,6 +1,7 @@
 """Definitions of networks used for feature extraction."""
 
 from abc import abstractmethod
+from collections import OrderedDict
 import numpy as np
 import gym
 import tensorflow as tf
@@ -610,8 +611,8 @@ class DeepBeliefNetwork(Model):
             inputs=inputs, outputs=outputs, name="DeepBeliefNetwork")
 
         # Let keras register the variables
+        model._saved_layers = [m.keras for m in self.layers]
         if self.training_layer is not None:
-            model._saved_layers = self.layers[self.training_layer].keras
             assert model.trainable_variables == \
                 self.layers[self.training_layer].keras.trainable_variables
 
@@ -686,8 +687,7 @@ class DeepBeliefNetwork(Model):
 
         # Training histograms
         training_layer = self.layers[self.training_layer]
-        training_outputs = outputs[1:]
-        tensors = training_layer.histograms(training_outputs)
+        tensors = training_layer.histograms(outputs[1:])
 
         # Add the model output
         tensors["outputs/dbn_output"] = outputs[0]
@@ -719,7 +719,7 @@ class LocalFluents(Model):
             `n_visible` parameters are not required, because they can be
             inferred.
         :param training_layer: layer to train. The first layers
-            are in DBN, the last is different.
+            are in DBN, the last is different. Can be None.
         :param resize_pixels: the input region is resized to have less than
             this number of pixels.
         """
@@ -755,10 +755,11 @@ class LocalFluents(Model):
             n_elements = spec["n_hidden"]
 
         # DeepBeliefNetwork
-        assert 0 <= self._training_layer < len(dbn_spec) + 1
+        if self._training_layer is not None:
+            assert 0 <= self._training_layer < len(dbn_spec) + 1
         self.dbn = DeepBeliefNetwork(
-            dbn_spec, training_layer=self._training_layer
-            if self._training_layer < len(dbn_spec) else None
+            dbn_spec, training_layer=None if self._training_layer is None or
+            self._training_layer >= len(dbn_spec) else self._training_layer
         )
 
         # NOTE: last layer is still missing because it should not be an rbm
@@ -815,15 +816,150 @@ class LocalFluents(Model):
             expected = tf.reshape(outputs[2], self._region_shape)
             inputs = tf.reshape(outputs[3], self._region_shape)
             return {"region/expected": expected, "region/input": inputs}
-        
+
         else:
             return {}
-
 
     def histograms(self, outputs):
         """Tensors to visualize."""
 
         return self.dbn.histograms(outputs)
+
+
+class Fluents(Model):
+    """All binary features for an Atari games.
+
+    This class is the outer Model: it represents all binary features (aka
+    fluents) found in a single Atari game.
+    Each environment has all fluents defined in its json file: they are
+    grouped in local features.
+    """
+
+    def __init__(self, env_name, dbn_spec, training_region, training_layer):
+        """Initialize.
+
+        :param env_name: a gym environment name.
+        :param dbn_spec: see LocalFluents `dbn_spec`; this is used for all.
+        :param training_region: name of the region to train.
+        :param training_layer: index of the region layer to train.
+        """
+
+        # Store
+        self._env_name = env_name
+        self._dbn_spec = dbn_spec
+        self._training_region = training_region
+        self._training_layer = training_layer
+        self._frame_shape = gym.make(env_name).observation_space.shape
+
+        # Read all regions
+        env_data = selector.read_back(self._env_name)
+        env_data.pop("_frame")
+        self._region_names = list(env_data.keys())
+        self._training_i = self._region_names.index(self._training_region)
+
+        # Collect fluents and their specification
+        self.fluents = OrderedDict()
+        for region_name in env_data:
+            region = env_data[region_name]
+            for fluent_name in region["fluents"]:
+
+                if not fluent_name.startswith(region["abbrev"] + "_"):
+                    raise ValueError(
+                        '"fluent0" for region abbrev "b" must be called '
+                        '"b_fluent0"')
+                self.fluents[fluent_name] = region["fluents"][fluent_name]
+
+        # All outputs toghether must the a prediction for all fluents
+        # TODO: last output of dbn_spec can't be the same for all
+        # TODO: last layer should depend on the number of fluents
+
+        # One model for each region
+        self.local_fluents = [
+            LocalFluents(
+                env_name=self._env_name, region=region,
+                dbn_spec=self._dbn_spec, training_layer=(
+                    self._training_layer if self._training_region == region
+                    else None),
+            ) for region in self._region_names
+        ]
+
+        # TODO: graph?
+        # Keras model
+        inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
+        ret = self.compute_all(inputs)
+        outputs = (
+            *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
+
+        model = tf.keras.Model(
+            inputs=inputs, outputs=outputs, name="Fluents")
+
+        # Let keras register the variables
+        model._saved_layers = [m.keras for m in self.local_fluents]
+        assert model.trainable_variables == \
+            self.local_fluents[self._training_i].keras.trainable_variables
+
+        # Save
+        self.keras = model
+        self.computed_gradient = True
+        self.train_step = False
+
+    def compute_all(self, inputs):
+        """Compute all tensors."""
+
+        # The first is the output of a prediction
+        prediction = self.predict(inputs)
+
+        # Then training data follow
+        ret = self.local_fluents[self._training_i].compute_all(inputs)
+
+        # Merge
+        ret["outputs"].insert(0, prediction)
+        return ret
+
+    def predict(self, inputs):
+        """A prediction with the model.
+
+        :param inputs: one batch.
+        :return: batch of values for all fluents.
+        """
+
+        predictions = [region.predict(inputs) for region in self.local_fluents]
+        predictions = tf.concat(predictions, axis=1)
+        return predictions
+
+    def images(self, outputs):
+        """Images to visualize."""
+
+        # The first come from this model and its not an image
+        outputs = outputs[1:]
+
+        # Collect all images and add a namescope
+        all_imgs = {}
+        for region in self.local_fluents:
+            imgs = region.images(outputs)
+            imgs = {
+                region._region_name + "/" + name: img
+                for name, img in imgs.items()}
+            all_imgs.update(imgs)
+
+        return all_imgs
+
+    def histograms(self, outputs):
+        """Tensors to visualize."""
+
+        # The first come from this model and its a duplicate
+        outputs = outputs[1:]
+
+        # Collect all histograms and add a namescope
+        all_hists = {}
+        for region in self.local_fluents:
+            hists = region.histograms(outputs)
+            hists = {
+                region._region_name + "/" + name: hist
+                for name, hist in hists.items()}
+            all_hists.update(hists)
+
+        return all_hists
 
 
 class GeneticModel(Model):
