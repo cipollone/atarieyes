@@ -189,9 +189,6 @@ def main():
         dest="save_frequency",
         help="Save checkpoints after this number of batches")
     features_train.add_argument(
-        "-c", "--continue", dest="cont", type=int, metavar="STEP",
-        help="Continue from the checkpoint of step numer..")
-    features_train.add_argument(
         "-r", "--rate", type=float, default=features_defaults["learning_rate"],
         dest="learning_rate", help="Learning rate")
     features_train.add_argument(
@@ -224,6 +221,14 @@ def main():
         required=True, dest="train_region_layer",
         help="Choose which model to train. Models are organized"
         " in region (a name) and layers (an int)")
+    features_train_resuming = features_train.add_mutually_exclusive_group()
+    features_train_resuming.add_argument(
+        "-c", "--continue", dest="cont", type=int, metavar="STEP",
+        help="Continue from the checkpoint of step numer..")
+    features_train_resuming.add_argument(
+        "-i", "--init", dest="initialize", type=int, metavar="STEP",
+        help="Start from step 0 but initialize from the checkpoint of "
+        "step number..")
 
     # Feature selection op
     feature_select = features_op.add_parser(

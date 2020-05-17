@@ -23,15 +23,16 @@ class Trainer:
         # Init
         self.log_frequency = args.log_frequency
         self.save_frequency = args.save_frequency
-        self.cont = (args.cont is not None)
-        self.init_step = args.cont if self.cont else 0
+        self.initialize_from = args.initialize or args.cont
+        self.resuming = self.initialize_from is not None
+        self.step0 = self.initialize_from if args.cont else 0
         self.learning_rate = args.learning_rate
         self.decay_rate = args.decay_rate
         self.batch_size = args.batch_size
 
         # Dirs
         model_path, log_path = tools.prepare_directories(
-            "features", args.env, resuming=self.cont, args=args)
+            "features", args.env, resuming=self.resuming, args=args)
 
         # Environment
         self.env = gym.make(args.env)
@@ -74,14 +75,15 @@ class Trainer:
     def train(self):
         """Train."""
 
-        self._step = self.init_step
+        self._step = self.step0
 
-        # New run
-        if not self.cont:
+        # Save graph once
+        if self._step == 0:
             self.logger.save_graph((self.batch_size, *self.frame_shape))
-        # Restore
-        else:
-            self.saver.load(self._step)
+
+        # Load weights
+        if self.resuming:
+            self.saver.load(self.initialize_from)
 
             # Initial valuation
             self.valuate()
@@ -98,7 +100,7 @@ class Trainer:
                 outputs = self.train_step()
 
             # Logs and savings
-            relative_step = self._step - self.init_step
+            relative_step = self._step - self.step0
             if relative_step % self.log_frequency == 0:
                 metrics = self.valuate(outputs)
                 print("Step ", self._step, ", ", metrics, sep="", end="    \r")
@@ -193,7 +195,8 @@ class CheckpointSaver:
         self.model = model
         self.score = float("-inf")
 
-        self.counters_file = os.path.join(path, "counters.json")
+        self.counters_file = os.path.join(
+            path, os.path.pardir, "counters.json")
         self.step_checkpoints = os.path.join(
             path, model.name + "_weights_{step}." + self.save_format)
 

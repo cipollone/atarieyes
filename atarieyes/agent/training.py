@@ -163,7 +163,8 @@ class CheckpointSaver(Callback):
         self.step = 0
         self.episode = 0
 
-        self.counters_file = os.path.join(path, "counters.json")
+        self.counters_file = os.path.join(
+            path, os.path.pardir, "counters.json")
         self.step_checkpoints = os.path.join(
             path, "weights_{step}." + self.save_format)
 
