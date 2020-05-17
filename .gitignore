@@ -1,7 +1,6 @@
 ## Project
-/logs
-/models
 /runs/
+/saved_runs/
 /notes.txt
 
 ## Packaging
