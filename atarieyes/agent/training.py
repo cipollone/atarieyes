@@ -24,11 +24,13 @@ class Trainer:
         :param args: namespace of arguments; see --help.
         """
 
-        self.cont = args.cont
+        # Params
+        self.resuming = args.cont is not None
+        self.initialize_from = args.cont
 
         # Dirs
         model_path, log_path = prepare_directories(
-            "agent", args.env, resuming=self.cont, args=args)
+            "agent", args.env, resuming=self.resuming, args=args)
         log_filename = "log.json"
         self.log_file = os.path.join(log_path, log_filename)
 
@@ -125,8 +127,8 @@ class Trainer:
 
         # Resume?
         init_step, init_episode = 0, 0
-        if self.cont:
-            init_step, init_episode = self.saver.load(self.cont)
+        if self.resuming:
+            init_step, init_episode = self.saver.load(self.initialize_from)
 
         # Go
         self.kerasrl_agent.fit(
@@ -199,26 +201,25 @@ class CheckpointSaver(Callback):
             filepath, overwrite=True, save_format=self.save_format)
         self._update_counters(filepath)
 
-    def load(self, step):
+    def load(self, path):
         """Load the weights from a checkpoint.
 
-        :param step: specify which checkpoint to load
+        :param path: load checkpoint at this path
         :return: tuple of (step, episode) of the restored checkpoint instant
         """
 
-        filepath = self.step_checkpoints.format(step=step)
+        # Restore
+        self.agent.load_weights(path)
+        print("> Loaded:", path)
 
-        # Weights
-        self.agent.load_weights(filepath)
-
-        # Counters
+        # Read counters
         with open(self.counters_file) as f:
-            counters = json.load(f)
+            data = json.load(f)
+
         self.step, self.episode = [
-            counters[filepath][i] for i in ("step", "episode")]
+            data[path][i] for i in ("step", "episode")]
         self.init_step = self.step
 
-        print("> Loaded:", filepath)
         return self.step, self.episode
 
     def on_step_end(self, episode_step, logs={}):

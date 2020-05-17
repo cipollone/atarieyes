@@ -25,7 +25,7 @@ class Trainer:
         self.save_frequency = args.save_frequency
         self.initialize_from = args.initialize or args.cont
         self.resuming = self.initialize_from is not None
-        self.step0 = self.initialize_from if args.cont else 0
+        self.new_run = not self.resuming or args.initialize is not None
         self.learning_rate = args.learning_rate
         self.decay_rate = args.decay_rate
         self.batch_size = args.batch_size
@@ -75,17 +75,19 @@ class Trainer:
     def train(self):
         """Train."""
 
-        self._step = self.step0
-
-        # Save graph once
-        if self._step == 0:
-            self.logger.save_graph((self.batch_size, *self.frame_shape))
+        self._step = step0 = 0
 
         # Load weights
         if self.resuming:
-            self.saver.load(self.initialize_from)
+            ckp_counters = self.saver.load(self.initialize_from)
 
-            # Initial valuation
+        # Save graph once
+        if self.new_run:
+            self.logger.save_graph((self.batch_size, *self.frame_shape))
+
+        # Continue previous training
+        else:
+            self._step = step0 = ckp_counters["step"]
             self.valuate()
             self._step += 1
 
@@ -100,7 +102,7 @@ class Trainer:
                 outputs = self.train_step()
 
             # Logs and savings
-            relative_step = self._step - self.step0
+            relative_step = self._step - step0
             if relative_step % self.log_frequency == 0:
                 metrics = self.valuate(outputs)
                 print("Step ", self._step, ", ", metrics, sep="", end="    \r")
@@ -244,17 +246,21 @@ class CheckpointSaver:
 
         return True
 
-    def load(self, step):
+    def load(self, path):
         """Load the weights from a checkpoint.
 
-        :param step: specify which checkpoint to load
+        :param path: load checkpoint at this path
+        :return: the counters (such as "step") associated to this checkpoint
         """
 
-        filepath = self.step_checkpoints.format(step=step)
-
         # Restore
-        self.model.load_weights(filepath)
-        print("> Loaded:", filepath)
+        self.model.load_weights(path)
+        print("> Loaded:", path)
+
+        # Read counters
+        with open(self.counters_file) as f:
+            data = json.load(f)
+        return data[path]
 
 
 class TensorBoardLogger:

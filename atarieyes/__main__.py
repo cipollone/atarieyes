@@ -82,8 +82,8 @@ def main():
         "-b", "--batch", type=int, default=agent_defaults["batch_size"],
         dest="batch_size", help="Training batch size")
     agent_train.add_argument(
-        "-c", "--continue", dest="cont", type=int,
-        metavar="STEP", help="Continue from the checkpoint of step numer..")
+        "-c", "--continue", dest="cont", type=str, metavar="FILE",
+        help="Continue training from checkpoint file")
     agent_train.add_argument(
         "-d", "--deterministic", action="store_true",
         help="Set a constant seed to ensure repeatability. Note: this is just "
@@ -134,8 +134,8 @@ def main():
         "args_file", type=str,
         help="Json file of arguments of a previous training")
     agent_play.add_argument(
-        "-c", "--continue", dest="cont", type=int, required=True,
-        metavar="STEP", help="Continue from the checkpoint of step numer..")
+        "-c", "--continue", dest="cont", type=str, required=True,
+        metavar="FILE", help="Load checkpoint file")
     agent_play.add_argument(
         "-w", "--watch", choices=["render", "stream", "both"],
         default="render", help="Choose how to follow the game: "
@@ -223,12 +223,12 @@ def main():
         " in region (a name) and layers (an int)")
     features_train_resuming = features_train.add_mutually_exclusive_group()
     features_train_resuming.add_argument(
-        "-c", "--continue", dest="cont", type=int, metavar="STEP",
-        help="Continue from the checkpoint of step numer..")
+        "-c", "--continue", dest="cont", type=str, metavar="FILE",
+        help="Continue training from checkpoint (with tf extension)")
     features_train_resuming.add_argument(
-        "-i", "--init", dest="initialize", type=int, metavar="STEP",
-        help="Start from step 0 but initialize from the checkpoint of "
-        "step number..")
+        "-i", "--init", dest="initialize", type=str, metavar="FILE",
+        help="Start from step 0 but initialize from checkpoint "
+        "(with tf extension")
 
     # Feature selection op
     feature_select = features_op.add_parser(

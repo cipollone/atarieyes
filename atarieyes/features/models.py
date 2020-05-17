@@ -853,7 +853,8 @@ class Fluents(Model):
         try:
             self._training_i = self._region_names.index(self._training_region)
         except ValueError:
-            raise ValueError(str(self._training_region) +
+            raise ValueError(
+                str(self._training_region) +
                 " not in " + str(self._region_names))
 
         # Collect fluents and their specification
