@@ -219,7 +219,9 @@ class BinaryRBM(Model):
 
         # Register the variables
         model = tf.Module(name="BinaryRBM")
-        model.layer = self.layers
+        model.vars = [                           # Fix an order
+            getattr(self.layers, v) for v in 
+            ("_W", "_bv", "_bh", "_h_distribution", "_saved_v")]
         assert len(model.variables) == len(self.layers.variables)
         assert len(model.trainable_variables) == len(
             self.layers.trainable_variables)
@@ -601,9 +603,9 @@ class DeepBeliefNetwork(Model):
 
         # Register the variables
         model = tf.Module(name="DeepBeliefNetwork")
-        model.layers = [l.model for l in self.layers]
+        model.layers = [inner.model for inner in self.layers]
         assert len(model.variables) == sum(
-            [len(l.model.variables) for l in self.layers])
+            [len(inner.model.variables) for inner in self.layers])
         if self.training_layer is not None:
             assert len(model.trainable_variables) == len(
                 self.layers[self.training_layer].model.trainable_variables)
@@ -871,9 +873,10 @@ class Fluents(Model):
         model = tf.Module(name="Fluents")
         model.layers = [f.model for f in self.local_features]
         assert len(model.variables) == sum(
-            [len(l.model.variables) for l in self.local_features])
+            [len(inner.model.variables) for inner in self.local_features])
         assert len(model.trainable_variables) == sum(
-            [len(l.model.trainable_variables) for l in self.local_features])
+            [len(inner.model.trainable_variables)
+                for inner in self.local_features])
 
         # Save
         self.model = model

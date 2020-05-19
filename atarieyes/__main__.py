@@ -13,8 +13,8 @@ def main():
 
     # Defaults
     features_defaults = dict(
-        log_frequency=20,
-        save_frequency=200,
+        log_frequency=50,
+        save_frequency=2000,
         batch_size=50,
         learning_rate=1e-3,
         decay_steps=50,
