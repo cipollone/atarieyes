@@ -20,6 +20,7 @@ def main():
         decay_steps=50,
         l2_const=0.1,
         sparsity_const=0.0,
+        sparsity_target=0.2,
         shuffle=10000,
         network_size=[50, 20],
     )
@@ -209,6 +210,10 @@ def main():
         "--sparsity-const", type=float, dest="sparsity_const",
         default=features_defaults["sparsity_const"],
         help="Scale factor of the sparsity promoting loss")
+    features_train.add_argument(
+        "--sparsity-target", type=float, dest="sparsity_target",
+        default=features_defaults["sparsity_target"],
+        help="e.g: 0.1 means hidden units active 10% of the time.")
     features_train.add_argument(
         "--shuffle", type=int, default=features_defaults["shuffle"],
         help="Size of the shuffle buffer.")

@@ -197,7 +197,7 @@ class BinaryRBM(Model):
 
     def __init__(
         self, *, n_visible, n_hidden, batch_size, l2_const, sparsity_const,
-        trainable=True,
+        sparsity_target, trainable=True,
     ):
         """Initialize.
 
@@ -214,7 +214,7 @@ class BinaryRBM(Model):
         self.layers = self.BernoulliPair(
             n_visible=n_visible, n_hidden=n_hidden, batch_size=batch_size,
             l2_const=l2_const, sparsity_const=sparsity_const,
-            trainable=trainable,
+            sparsity_target=sparsity_target, trainable=trainable,
         )
 
         # Register the variables
@@ -295,7 +295,7 @@ class BinaryRBM(Model):
 
         def __init__(
             self, *, n_visible, n_hidden, batch_size, l2_const, sparsity_const,
-            trainable=True,
+            sparsity_target=0.1, trainable=True,
         ):
             """Initialize.
 
@@ -304,8 +304,8 @@ class BinaryRBM(Model):
             :param batch_size: fixed size of the batch.
             :param l2_const: scale factor of the L2 loss on W.
             :param sparsity_const: scale factor of the sparsity promoting loss.
-                Target distribution is 10% activation for all hidden units.
-            :param layer_kwargs: base layer arguments
+            :param sparsity_target: 0.1 means hidden units active 10% of the
+                time.
             :param trainable: trainable layer flag
             """
 
@@ -316,7 +316,7 @@ class BinaryRBM(Model):
             self.layer_options = dict(
                 n_visible=n_visible, n_hidden=n_hidden, batch_size=batch_size,
                 l2_const=l2_const, sparsity_const=sparsity_const,
-                trainable=trainable,
+                sparsity_target=sparsity_target, trainable=trainable,
             )
 
             # Constants
@@ -325,7 +325,7 @@ class BinaryRBM(Model):
             self._n_hidden = n_hidden
             self._l2_const = l2_const
             self._sparsity_const = sparsity_const
-            self._h_distribution_target = 0.1
+            self._h_distribution_target = sparsity_target
             self._h_ema_decay = 0.99
 
             # Define parameters

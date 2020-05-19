@@ -48,6 +48,7 @@ class Trainer:
         network_spec = [dict(
                 n_hidden=units, batch_size=args.batch_size,
                 l2_const=args.l2_const, sparsity_const=args.sparsity_const,
+                sparsity_target=args.sparsity_target,
             ) for units in args.network_size
         ]
         self.model = models.Fluents(
