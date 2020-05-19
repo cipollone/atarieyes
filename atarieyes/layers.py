@@ -1,7 +1,5 @@
 """Various custom layers. Any conceptual block can be a layer."""
 
-import json
-import os
 import inspect
 import numpy as np
 import tensorflow as tf
@@ -275,36 +273,23 @@ class CropToEnv(BaseLayer):
 
     The purpose of this function is to crop to the relevant part of the frame
     for each game. The box of each game can be specified with the Selector
-    tool.
+    tool. See selector doc for more.
     """
 
-    def __init__(self, env_name, region="box", **kwargs):
+    def __init__(self, env_name, region="_frame", **kwargs):
         """Initialize.
 
         :param env_name: a gym environment name.
-        :param region: "box" is a large region for the relevant part of the
+        :param region: "_frame" is a large region for the relevant part of the
             frame. Any other name is interpreted as a the identifier of
             a local feature.
         :raises: ValueError: if unknown env.
         """
 
         # Load the selection
-        env_json = os.path.join(selector.info_dir, env_name + ".json")
-        if not os.path.exists(env_json):
-            box = None
-        else:
-            with open(env_json) as f:
-                env_data = json.load(f)
-            if region == "box":
-                box = env_data["box"]
-            else:
-                box = env_data["regions"][region]
-
-        # Check
-        if not box:
-            raise ValueError(
-                "No box defined for " + str(env_name) + ". "
-                "Run:\n  atarieyes features select -e " + str(env_name))
+        env_data = selector.read_back(env_name)
+        box = env_data[region] if region == "_frame" \
+            else env_data[region]["region"]
 
         # Set
         self._box_slice_w = slice(box[0], box[2])

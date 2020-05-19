@@ -13,14 +13,16 @@ def main():
 
     # Defaults
     features_defaults = dict(
-        log_frequency=20,
-        save_frequency=200,
+        log_frequency=50,
+        save_frequency=2000,
         batch_size=50,
         learning_rate=1e-3,
         decay_steps=50,
-        n_hidden=100,
         l2_const=0.1,
         sparsity_const=0.0,
+        sparsity_target=0.2,
+        shuffle=10000,
+        network_size=[50, 20],
     )
     agent_defaults = dict(
         memory_limit=1000000,
@@ -81,8 +83,8 @@ def main():
         "-b", "--batch", type=int, default=agent_defaults["batch_size"],
         dest="batch_size", help="Training batch size")
     agent_train.add_argument(
-        "-c", "--continue", dest="cont", type=int,
-        metavar="STEP", help="Continue from the checkpoint of step numer..")
+        "-c", "--continue", dest="cont", type=str, metavar="FILE",
+        help="Continue training from checkpoint file")
     agent_train.add_argument(
         "-d", "--deterministic", action="store_true",
         help="Set a constant seed to ensure repeatability. Note: this is just "
@@ -119,6 +121,9 @@ def main():
         default=agent_defaults["random_test"],
         help="Probability of a random action while testing/playing")
     agent_train.add_argument(
+        "--rand-eps", action="store_true", dest="random_epsilon",
+        help="Randomness varies from 0 to --rand-test for each episode.")
+    agent_train.add_argument(
         "--target-update", type=int, metavar="STEPS", dest="target_update",
         default=agent_defaults["target_update"], help="Frequency, in steps, "
         "at which the target model is updated (see DDQN)")
@@ -130,8 +135,8 @@ def main():
         "args_file", type=str,
         help="Json file of arguments of a previous training")
     agent_play.add_argument(
-        "-c", "--continue", dest="cont", type=int, required=True,
-        metavar="STEP", help="Continue from the checkpoint of step numer..")
+        "-c", "--continue", dest="cont", type=str, required=True,
+        metavar="FILE", help="Load checkpoint file")
     agent_play.add_argument(
         "-w", "--watch", choices=["render", "stream", "both"],
         default="render", help="Choose how to follow the game: "
@@ -146,6 +151,9 @@ def main():
         "--rand-test", type=float, metavar="PROB", dest="random_test",
         default=agent_defaults["random_test"],
         help="Probability of a random action while testing/playing")
+    agent_play.add_argument(
+        "--rand-eps", action="store_true", dest="random_epsilon",
+        help="Randomness varies from 0 to --rand-test for each episode.")
 
     # Agent watch op
     agent_watch = agent_op.add_parser(
@@ -172,8 +180,6 @@ def main():
         "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
     features_train.add_argument(
-        "--render", action="store_true", help="Render while training")
-    features_train.add_argument(
         "-b", "--batch", type=int, default=features_defaults["batch_size"],
         dest="batch_size", help="Training batch size")
     features_train.add_argument(
@@ -183,9 +189,6 @@ def main():
         "-s", "--saves", type=int, default=features_defaults["save_frequency"],
         dest="save_frequency",
         help="Save checkpoints after this number of batches")
-    features_train.add_argument(
-        "-c", "--continue", dest="cont", type=int, metavar="STEP",
-        help="Continue from the checkpoint of step numer..")
     features_train.add_argument(
         "-r", "--rate", type=float, default=features_defaults["learning_rate"],
         dest="learning_rate", help="Learning rate")
@@ -200,10 +203,6 @@ def main():
         "--decay-rate", action="store_true", dest="decay_rate",
         help="Use a decaying learning rate.")
     features_train.add_argument(
-        "--n-hidden", type=int, dest="n_hidden",
-        default=features_defaults["n_hidden"],
-        help="Number of hidden units (if applicable)")
-    features_train.add_argument(
         "--l2-const", type=float, dest="l2_const",
         default=features_defaults["l2_const"],
         help="Scale factor of the L2 loss")
@@ -211,6 +210,30 @@ def main():
         "--sparsity-const", type=float, dest="sparsity_const",
         default=features_defaults["sparsity_const"],
         help="Scale factor of the sparsity promoting loss")
+    features_train.add_argument(
+        "--sparsity-target", type=float, dest="sparsity_target",
+        default=features_defaults["sparsity_target"],
+        help="e.g: 0.1 means hidden units active 10% of the time.")
+    features_train.add_argument(
+        "--shuffle", type=int, default=features_defaults["shuffle"],
+        help="Size of the shuffle buffer.")
+    features_train.add_argument(
+        "--network", type=int, nargs="+", metavar="N_UNITS",
+        dest="network_size", default=features_defaults["network_size"],
+        help="Number of hidden units, one for each layer (last omitted).")
+    features_train.add_argument(
+        "--train", type=str, nargs=2, metavar=("REGION", "LAYER"),
+        required=True, dest="train_region_layer",
+        help="Choose which model to train. Models are organized"
+        " in region (a name) and layers (an int)")
+    features_train_resuming = features_train.add_mutually_exclusive_group()
+    features_train_resuming.add_argument(
+        "-c", "--continue", dest="cont", type=str, metavar="FILE",
+        help="Continue training from checkpoint (with tf extension)")
+    features_train_resuming.add_argument(
+        "-i", "--init", dest="initialize", type=str, metavar="FILE",
+        help="Start from step 0 but initialize from checkpoint "
+        "(with tf extension")
 
     # Feature selection op
     feature_select = features_op.add_parser(

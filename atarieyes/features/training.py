@@ -23,15 +23,16 @@ class Trainer:
         # Init
         self.log_frequency = args.log_frequency
         self.save_frequency = args.save_frequency
-        self.cont = bool(args.cont)
-        self.init_step = args.cont if self.cont else 0
+        self.initialize_from = args.initialize or args.cont
+        self.resuming = self.initialize_from is not None
+        self.new_run = not self.resuming or args.initialize is not None
         self.learning_rate = args.learning_rate
         self.decay_rate = args.decay_rate
         self.batch_size = args.batch_size
 
         # Dirs
         model_path, log_path = tools.prepare_directories(
-            "features", args.env, resuming=self.cont, args=args)
+            "features", args.env, resuming=self.resuming, args=args)
 
         # Environment
         self.env = gym.make(args.env)
@@ -40,14 +41,20 @@ class Trainer:
         # Dataset
         dataset = make_dataset(
             lambda: agent_player(args.env, args.stream),
-            args.batch_size, self.frame_shape)
+            args.batch_size, self.frame_shape, args.shuffle)
         self.dataset_it = iter(dataset)
 
         # Model
-        self.model = models.LocalFluent(
-            env_name=args.env, region="blue_right", n_hidden=args.n_hidden,
-            batch_size=args.batch_size, l2_const=args.l2_const,
-            sparsity_const=args.sparsity_const,
+        network_spec = [dict(
+                n_hidden=units, batch_size=args.batch_size,
+                l2_const=args.l2_const, sparsity_const=args.sparsity_const,
+                sparsity_target=args.sparsity_target,
+            ) for units in args.network_size
+        ]
+        self.model = models.Fluents(
+            env_name=args.env, dbn_spec=network_spec,
+            training_region=args.train_region_layer[0],
+            training_layer=int(args.train_region_layer[1]),
         )
 
         # Optimization
@@ -56,44 +63,54 @@ class Trainer:
                 args.learning_rate, decay_steps=args.decay_steps,
                 decay_rate=0.95)
         self.optimizer = tf.optimizers.Adam(self.learning_rate)
-        self.params = self.model.keras.trainable_variables
+        self.params = self.model.model.trainable_variables
 
         # Tools
-        self.saver = CheckpointSaver(self.model.keras, model_path)
+        self.saver = CheckpointSaver(self.model.model, model_path)
         self.logger = TensorBoardLogger(self.model, log_path)
+
+        # Save on exit
+        tools.QuitWithResources.add(
+            "last_save", lambda: self.saver.save(self._step))
 
     def train(self):
         """Train."""
 
-        step = self.init_step
+        self._step = step0 = 0
 
-        # New run
-        if not self.cont:
+        # Load weights
+        if self.resuming:
+            ckp_counters = self.saver.load(self.initialize_from)
+
+        # Save graph once
+        if self.new_run:
             self.logger.save_graph((self.batch_size, *self.frame_shape))
-        # Restore
-        else:
-            self.saver.load(step)
 
-            # Initial valuation
-            self.valuate(step)
-            step += 1
+        # Continue previous training
+        else:
+            self._step = step0 = ckp_counters["step"]
+            self.valuate()
+            self._step += 1
 
         # Training loop
         print("> Training")
         while True:
 
             # Do
-            outputs = self.train_step()
+            if self.model.train_step:
+                outputs = self.model.train_step()
+            else:
+                outputs = self.train_step()
 
             # Logs and savings
-            relative_step = step - self.init_step
+            relative_step = self._step - step0
             if relative_step % self.log_frequency == 0:
-                metrics = self.valuate(step, outputs)
-                print("Step ", step, ", ", metrics, sep="", end="          \r")
+                metrics = self.valuate(outputs)
+                print("Step ", self._step, ", ", metrics, sep="", end="    \r")
             if relative_step % self.save_frequency == 0 and relative_step > 0:
-                self.saver.save(step)
+                self.saver.save(self._step)
 
-            step += 1
+            self._step += 1
 
     @tf.function
     def train_step(self):
@@ -118,12 +135,11 @@ class Trainer:
 
         return outputs
 
-    def valuate(self, step, outputs=None):
+    def valuate(self, outputs=None):
         """Compute the metrics on one batch and save a log.
 
         When 'outputs' is not given, it runs the model to compute the metrics.
 
-        :param step: current step.
         :param outputs: (optional) outputs returned by Model.compute_all.
         :return: the saved quantities (metrics and loss)
         """
@@ -140,16 +156,16 @@ class Trainer:
         if outputs["loss"] is not None:
             metrics["loss"] = outputs["loss"]
         metrics["learning_rate"] = self.learning_rate if not self.decay_rate \
-            else self.learning_rate(step)
-        self.logger.save_scalars(step, metrics)
+            else self.learning_rate(self._step)
+        self.logger.save_scalars(self._step, metrics)
 
         # Log images
         images = self.model.images(outputs["outputs"])
-        self.logger.save_images(step, images)
+        self.logger.save_images(self._step, images)
 
         # Log histograms
         histograms = self.model.histograms(outputs["outputs"])
-        self.logger.save_histogram(step, histograms)
+        self.logger.save_histogram(self._step, histograms)
 
         # Transform tensors to scalars for nice logs
         metrics = {
@@ -169,22 +185,22 @@ class Trainer:
 class CheckpointSaver:
     """Save weights and restore."""
 
-    save_format = "h5"
-
     def __init__(self, model, path):
         """Initialize.
 
-        :param model: the Keras model that will be saved.
+        :param model: any tf.Module, tf.keras.Model or tf.keras.layers.Layer
+            to be saved.
         :param path: directory where checkpoints should be saved.
         """
 
         # Store
-        self.model = model
         self.score = float("-inf")
+        self.checkpoint = tf.train.Checkpoint(model=model)
 
-        self.counters_file = os.path.join(path, "counters.json")
+        self.counters_file = os.path.join(
+            path, os.path.pardir, "counters.json")
         self.step_checkpoints = os.path.join(
-            path, model.name + "_weights_{step}." + self.save_format)
+            path, model.name + "_weights_{step}.tf")
 
     def _update_counters(self, filepath, step):
         """Updates the file of counters with a new entry.
@@ -224,23 +240,26 @@ class CheckpointSaver:
 
         # Save
         filepath = self.step_checkpoints.format(step=step)
-        self.model.save_weights(
-            filepath, overwrite=True, save_format=self.save_format)
+        self.checkpoint.write(filepath)
         self._update_counters(filepath=filepath, step=step)
 
         return True
 
-    def load(self, step):
+    def load(self, path):
         """Load the weights from a checkpoint.
 
-        :param step: specify which checkpoint to load
+        :param path: load checkpoint at this path
+        :return: the counters (such as "step") associated to this checkpoint
         """
 
-        filepath = self.step_checkpoints.format(step=step)
-
         # Restore
-        self.model.load_weights(filepath)
-        print("> Loaded:", filepath)
+        self.checkpoint.restore(path)
+        print("> Loaded:", path)
+
+        # Read counters
+        with open(self.counters_file) as f:
+            data = json.load(f)
+        return data[path]
 
 
 class TensorBoardLogger:
@@ -317,7 +336,7 @@ class TensorBoardLogger:
                 tf.summary.histogram(name, tensor, step)
 
 
-def make_dataset(game_player, batch, frame_shape):
+def make_dataset(game_player, batch, frame_shape, shuffle_size):
     """Create a TF Dataset from frames of a game.
 
     Creates a TF Dataset which contains batches of frames.
@@ -326,6 +345,7 @@ def make_dataset(game_player, batch, frame_shape):
         must return frames of the game.
     :param batch: Batch size.
     :param frame_shape: Frame shape retuned by game_player.
+    :param shuffle_size: size of the shuffle buffer.
     :return: Tensorflow Dataset.
     """
 
@@ -339,7 +359,7 @@ def make_dataset(game_player, batch, frame_shape):
     dataset = tf.data.Dataset.from_generator(
         frame_iterate, output_types=tf.uint8, output_shapes=frame_shape)
 
-    dataset = dataset.shuffle(5000)
+    dataset = dataset.shuffle(shuffle_size)
     dataset = dataset.batch(batch)
     dataset = dataset.prefetch(1)
 

@@ -8,11 +8,13 @@ Agent:
 
 Features:
 	Todo next:
+		- Train the second RBN of the DBN.
+		- New Genetic Algorithm for boolean rules
 	Todo later/maybe:
-		- self._saved_v shouldn't be saved.
-			This causes an error when resuming with a different batch.
 
 Done:
 	- Simple autoencoder
 	- Atari Breakout Player
 	- Collected frames from trained player or during training
+	- RBM
+	- GA

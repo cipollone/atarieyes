@@ -20,6 +20,12 @@ class ABCMeta2(ABCMeta):
         class C(metaclass=ABCMeta2):
             attr = AbstractAttribute()
             ...
+
+    It is also possible to define methods and properties with that name:
+        class C(metaclass=ABCMeta2):
+            def attr(self):
+                ...
+
     Note: methods of this class are not inherited by other classes' instances.
     """
 
@@ -239,6 +245,8 @@ def prepare_directories(
 ):
     """Prepare the directories where weights and logs are saved.
 
+    Just to know the output paths, call this function with `no_create=True`.
+
     :param what: what is trained, usually 'agent' or 'features'.
     :param env_name: the actual paths are a composition of
         'what' and 'env_name'.
@@ -254,8 +262,8 @@ def prepare_directories(
         resuming = True
 
     # Choose diretories
-    models_path = os.path.join("models", what, env_name)
-    logs_path = os.path.join("logs", what, env_name)
+    models_path = os.path.join("runs", what, env_name, "models")
+    logs_path = os.path.join("runs", what, env_name, "logs")
     dirs = (models_path, logs_path)
 
     # Delete old ones
@@ -274,24 +282,34 @@ def prepare_directories(
                 shutil.rmtree(d)
             os.makedirs(d)
 
-    # Logs alwas use new directories (using increasing numbers)
+    # Logs and models for the same run are saved in
+    #   directories with increasing numbers
     i = 0
-    while os.path.exists(os.path.join(logs_path, str(i))):
+    while (
+        os.path.exists(os.path.join(logs_path, str(i))) or
+        os.path.exists(os.path.join(models_path, str(i)))
+    ):
         i += 1
-    log_path = os.path.join(logs_path, str(i))
 
-    # Return current
+    # Should i return the current?
     if no_create:
+        last_model_path = os.path.join(models_path, str(i-1))
         last_log_path = os.path.join(logs_path, str(i-1))
-        if i == 0 or not os.path.exists(last_log_path):
+        if (
+            i == 0 or not os.path.exists(last_log_path) or
+            not os.path.exists(last_model_path)
+        ):
             raise RuntimeError("Dirs should be created first")
-        return (models_path, last_log_path)
+        return (last_model_path, last_log_path)
 
-    # New log
+    # New dirs
+    model_path = os.path.join(models_path, str(i))
+    log_path = os.path.join(logs_path, str(i))
+    os.mkdir(model_path)
     os.mkdir(log_path)
 
     # Save arguments
     if args is not None:
         ArgumentSaver.save(os.path.join(log_path, "args.json"), args)
 
-    return (models_path, log_path)
+    return (model_path, log_path)

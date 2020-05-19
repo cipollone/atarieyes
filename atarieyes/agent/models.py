@@ -15,6 +15,8 @@ from tensorflow import keras
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Flatten, Permute
 from rl.core import Processor
+from rl.policy import Policy
+from rl.callbacks import Callback
 
 from atarieyes.tools import ABCMeta2, AbstractAttribute
 from atarieyes.layers import CropToEnv, ConvBlock
@@ -200,3 +202,71 @@ class AtariAgent(QAgentDef):
                 terminal = True
 
             return observation, action, reward, terminal
+
+
+class EpisodeRandomEpsPolicy(Policy):
+    """This is an EpsGreedyQPolicy with a different eps for each episode.
+
+    Add self.callback to your callbacks to properly update the epsilon.
+    """
+
+    def __init__(self, min_eps=0.0, max_eps=1.0):
+        """Initialize.
+
+        :param min_eps: minimum epsilon value (prob of a random action).
+        :param max_eps: maximum epsilon value.
+        """
+
+        # Super
+        Policy.__init__(self)
+
+        # Store
+        self._min_eps = min_eps
+        self._max_eps = max_eps
+        self.eps = None
+
+        self.callback = self._Callback(self)
+
+    def get_config(self):
+        """Return object configuration (Policy interface)."""
+
+        config = Policy.get_config(self)
+        config["max_eps"] = self._max_eps
+        config["min_eps"] = self._min_eps
+
+        return config
+
+    def select_action(self, q_values):
+        """Return an action.
+
+        :param q_values: list of estimated Q for each action.
+        :return: an action (int)
+        """
+
+        assert q_values.ndim == 1
+        nb_actions = q_values.shape[0]
+
+        if np.random.uniform() < self.eps:
+            action = np.random.random_integers(0, nb_actions-1)
+        else:
+            action = np.argmax(q_values)
+        return action
+
+    class _Callback(Callback):
+        """This callback updates the eps for each episode."""
+
+        def __init__(self, policy):
+            """Initialize."""
+
+            # Super
+            Callback.__init__(self)
+
+            # Store
+            self._min_eps = policy._min_eps
+            self._max_eps = policy._max_eps
+            self._policy = policy
+
+        def on_episode_begin(self, episode, logs={}):
+            """Called at beginning of each episode."""
+
+            self._policy.eps = np.random.uniform(self._min_eps, self._max_eps)
