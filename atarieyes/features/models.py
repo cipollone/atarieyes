@@ -19,7 +19,9 @@ class Model(ABC2):
     `compute_all` is the forward pass used during training, while `predict`
     should be the minimal set of operations needed to compute the output.
 
-    The `keras` attribute is a keras model.
+    The `model` attribute is the outer model: it can be a tf.keras.Model,
+    a tf.keras.layers.Layer or any other tf.Module. Weights are saved and
+    restored for this object.
     Some models require a non-standard training step. These can manually
     compute the gradient to be applied, inside the compute_all function.
     The `computed_gradient` must be set to True, in this case.
@@ -29,8 +31,8 @@ class Model(ABC2):
     with Trainer.train_step().
     """
 
-    # This is the keras model
-    keras = AbstractAttribute()
+    # This is the main model
+    model = AbstractAttribute()
 
     # Custom training?
     computed_gradient = AbstractAttribute()
@@ -101,11 +103,11 @@ class FrameAutoencoder(Model):
         outputs = (*ret["outputs"], ret["loss"])
 
         model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name="frame_autoencoder")
+            inputs=inputs, outputs=outputs, name="FrameAutoencoder")
         model.summary()
 
         # Store
-        self.keras = model
+        self.model = model
         self.computed_gradient = False
         self.train_step = False
 
@@ -200,7 +202,7 @@ class BinaryRBM(Model):
         """Initialize.
 
         See BinaryRBM.BernoulliPair for Doc.
-        :param trainable: keras Layer argument
+        :param trainable: trainable layer boolean flag.
         """
 
         # Store
@@ -215,21 +217,15 @@ class BinaryRBM(Model):
             trainable=trainable,
         )
 
-        # Keras model
-        inputs = tf.keras.Input(shape=[n_visible], dtype=tf.float32)
-        ret = self.compute_all(inputs)
-        outputs = (
-            *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
-
-        model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name="BinaryRBM")
-
-        # Let keras register the variables
-        model._saved_layers = self.layers
-        assert model.trainable_variables == self.layers.trainable_variables
+        # Register the variables
+        model = tf.Module(name="BinaryRBM")
+        model.layer = self.layers
+        assert len(model.variables) == len(self.layers.variables)
+        assert len(model.trainable_variables) == len(
+            self.layers.trainable_variables)
 
         # Save
-        self.keras = model
+        self.model = model
         self.computed_gradient = True
         self.train_step = False
 
@@ -603,23 +599,17 @@ class DeepBeliefNetwork(Model):
                 BinaryRBM(**spec)
             )
 
-        # Keras model
-        inputs = tf.keras.Input(shape=self.input_shape[1:], dtype=tf.float32)
-        ret = self.compute_all(inputs)
-        outputs = (
-            *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
-
-        model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name="DeepBeliefNetwork")
-
-        # Let keras register the variables
-        model._saved_layers = [m.keras for m in self.layers]
+        # Register the variables
+        model = tf.Module(name="DeepBeliefNetwork")
+        model.layers = [l.model for l in self.layers]
+        assert len(model.variables) == sum(
+            [len(l.model.variables) for l in self.layers])
         if self.training_layer is not None:
-            assert model.trainable_variables == \
-                self.layers[self.training_layer].keras.trainable_variables
+            assert len(model.trainable_variables) == len(
+                self.layers[self.training_layer].model.trainable_variables)
 
         # Save
-        self.keras = model
+        self.model = model
         self.computed_gradient = True
         self.train_step = False
 
@@ -761,21 +751,15 @@ class LocalFeatures(Model):
         # Counter
         type(self)._n_instances += 1
 
-        # Keras model
-        inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
-        ret = self.compute_all(inputs)
-        outputs = (
-            *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
-
-        model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name="LocalFeatures")
-
-        # Let keras register the variables
-        model._saved_layers = self.dbn.keras
-        assert model.trainable_variables == self.dbn.keras.trainable_variables
+        # Register the variables
+        model = tf.Module(name="LocalFeatures")
+        model.layer = self.dbn.model
+        assert len(model.variables) == len(self.dbn.model.variables)
+        assert len(model.trainable_variables) == len(
+            self.dbn.model.trainable_variables)
 
         # Save
-        self.keras = model
+        self.model = model
         self.computed_gradient = True
         self.train_step = False
 
@@ -883,22 +867,16 @@ class Fluents(Model):
 
         # NOTE: last layer is still missing because it should be different.
 
-        # Keras model
-        inputs = tf.keras.Input(shape=self._frame_shape, dtype=tf.uint8)
-        ret = self.compute_all(inputs)
-        outputs = (
-            *ret["outputs"], *ret["gradients"], *ret["metrics"].values())
-
-        model = tf.keras.Model(
-            inputs=inputs, outputs=outputs, name="Fluents")
-
-        # Let keras register the variables
-        model._saved_layers = [m.keras for m in self.local_features]
-        assert model.trainable_variables == \
-            self.local_features[self._training_i].keras.trainable_variables
+        # Register the variables
+        model = tf.Module(name="Fluents")
+        model.layers = [f.model for f in self.local_features]
+        assert len(model.variables) == sum(
+            [len(l.model.variables) for l in self.local_features])
+        assert len(model.trainable_variables) == sum(
+            [len(l.model.trainable_variables) for l in self.local_features])
 
         # Save
-        self.keras = model
+        self.model = model
         self.computed_gradient = True
         self.train_step = False
 
@@ -983,29 +961,16 @@ class GeneticModel(Model):
         # Store
         self.ga = ga
 
-        # Keras model
-        keras_block = self.GALayer(ga)
-        pop_shape, pop_dtype = ga.population.shape, ga.population.dtype
-        inputs = (
-            tf.keras.Input(
-                shape=pop_shape[1:], batch_size=pop_shape[0],
-                dtype=pop_dtype, name="population"
-            ),
-            tf.keras.Input(shape=[], batch_size=pop_shape[0], name="fitness"),
-        )
-        ret = keras_block(inputs)
-
-        model = tf.keras.Model(
-            inputs=inputs, outputs=ret, name="GeneticAlgorithm")
-        model.summary()
+        # Init
+        model = self.GALayer(ga)
 
         # Save
-        self.keras = model
+        self.model = model
         self.computed_gradient = False
         self.train_step = self.ga.train_step
 
     class GALayer(BaseLayer):
-        """Keras wrapper around genetic algorithms."""
+        """Layer wrapper around genetic algorithms."""
 
         def __init__(self, ga, **layer_kwargs):
 

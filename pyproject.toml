@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "atarieyes"
-version = "0.1.0"
+version = "0.1.1"
 description = "Guided RL on the Atari games with features extraction"
 authors = ["Roberto Cipollone <cipollone.rt@gmail.com>"]
 readme = "README.md"

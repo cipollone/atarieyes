@@ -62,10 +62,10 @@ class Trainer:
                 args.learning_rate, decay_steps=args.decay_steps,
                 decay_rate=0.95)
         self.optimizer = tf.optimizers.Adam(self.learning_rate)
-        self.params = self.model.keras.trainable_variables
+        self.params = self.model.model.trainable_variables
 
         # Tools
-        self.saver = CheckpointSaver(self.model.keras, model_path)
+        self.saver = CheckpointSaver(self.model.model, model_path)
         self.logger = TensorBoardLogger(self.model, log_path)
 
         # Save on exit
@@ -184,23 +184,22 @@ class Trainer:
 class CheckpointSaver:
     """Save weights and restore."""
 
-    save_format = "tf"
-
     def __init__(self, model, path):
         """Initialize.
 
-        :param model: the Keras model that will be saved.
+        :param model: any tf.Module, tf.keras.Model or tf.keras.layers.Layer
+            to be saved.
         :param path: directory where checkpoints should be saved.
         """
 
         # Store
-        self.model = model
         self.score = float("-inf")
+        self.checkpoint = tf.train.Checkpoint(model=model)
 
         self.counters_file = os.path.join(
             path, os.path.pardir, "counters.json")
         self.step_checkpoints = os.path.join(
-            path, model.name + "_weights_{step}." + self.save_format)
+            path, model.name + "_weights_{step}.tf")
 
     def _update_counters(self, filepath, step):
         """Updates the file of counters with a new entry.
@@ -240,8 +239,7 @@ class CheckpointSaver:
 
         # Save
         filepath = self.step_checkpoints.format(step=step)
-        self.model.save_weights(
-            filepath, overwrite=True, save_format=self.save_format)
+        self.checkpoint.write(filepath)
         self._update_counters(filepath=filepath, step=step)
 
         return True
@@ -254,7 +252,7 @@ class CheckpointSaver:
         """
 
         # Restore
-        self.model.load_weights(path)
+        self.checkpoint.restore(path)
         print("> Loaded:", path)
 
         # Read counters
