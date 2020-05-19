@@ -297,7 +297,7 @@ class BinaryRBM(Model):
 
         def __init__(
             self, *, n_visible, n_hidden, batch_size, l2_const, sparsity_const,
-            **layer_kwargs,
+            trainable=True,
         ):
             """Initialize.
 
@@ -308,15 +308,17 @@ class BinaryRBM(Model):
             :param sparsity_const: scale factor of the sparsity promoting loss.
                 Target distribution is 10% activation for all hidden units.
             :param layer_kwargs: base layer arguments
+            :param trainable: trainable layer flag
             """
 
             # Super
-            BaseLayer.__init__(self, **layer_kwargs)
+            BaseLayer.__init__(self, trainable=trainable)
 
             # Save options
             self.layer_options = dict(
                 n_visible=n_visible, n_hidden=n_hidden, batch_size=batch_size,
-                l2_const=l2_const, sparsity_const=sparsity_const
+                l2_const=l2_const, sparsity_const=sparsity_const,
+                trainable=trainable,
             )
 
             # Constants
@@ -331,14 +333,14 @@ class BinaryRBM(Model):
             # Define parameters
             self._W = self.add_weight(
                 name="W", shape=(n_visible, n_hidden),
-                dtype=tf.float32, trainable=True,
+                dtype=tf.float32, trainable=self.layer_options["trainable"],
                 initializer=tf.keras.initializers.TruncatedNormal(0, 0.01))
             self._bv = self.add_weight(
-                name="bv", shape=(n_visible,),
-                dtype=tf.float32, trainable=True, initializer="zeros")
+                name="bv", shape=(n_visible,), dtype=tf.float32,
+                trainable=self.layer_options["trainable"], initializer="zeros")
             self._bh = self.add_weight(
-                name="bh", shape=(n_hidden,),
-                dtype=tf.float32, trainable=True, initializer="zeros")
+                name="bh", shape=(n_hidden,), dtype=tf.float32,
+                trainable=self.layer_options["trainable"], initializer="zeros")
 
             # Activation of hidden units (used for sparsity promoting)
             self._h_distribution = tf.Variable(
