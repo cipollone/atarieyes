@@ -10,29 +10,36 @@ environment. This is an example:
         152,
         197
       ],
-      "blue": {
-        "abbrev": "b",
-        "fluents": {
-          "b_fluent1": "<b_fluent1*>end",
-          "b_fluent2": "<(b_fluent1; b_fluent2)*>end"
-        },
-        "region": [
-          8,
-          88,
-          152,
-          94
-        ]
-      }
+      "regions": {
+        "blue": {
+          "abbrev": "b",
+          "fluents": [
+            "b_fluent1",
+            "b_fluent2"
+          ],
+          "region": [
+            8,
+            88,
+            152,
+            94
+          ]
+        }
+      },
+      "constraint": "true"
     }
 
-"_frame" is a special name: these are the coordinates of a large crop of the
-entire frame (possibly hiding unrelevant parts).
-"blue" is the name chosen for a region (could be any). "region" holds
-the coordinates for its crop. "fluents" holds a dict of symbols. Each of them
-is a propositional atom with an associated LDLf temporal formula that it
-respects. "abbrev" is an abbreviation of the region name, to be used in
-"fluents. The fluents section is not filled by the selector, but you can
-define those manually.
+"_frame" contains the coordinates of a large crop of the entire frame
+(possibly hiding unrelevant parts). "regions" is a dict of informations,
+each region and it's definition. In this case, "blue" is the name chosen
+for the only defined region (it could be any name). "region" holds
+the coordinates for its crop. "fluents" holds a list of symbols. Each of them
+is a propositional atom that is evaluated on this region. All flents must
+be named with a prefix of the region ("abbrev") + underscore + any name.
+Finally, "constraint" is a temporal LDLf formula that declares how the fluents
+you define are expected to change and how are they related with each other.
+
+The selector tool of this module allows to write all fields except "fluents"
+and "constraint" which you can easily add manually to the json file.
 """
 
 import gym
@@ -54,7 +61,7 @@ def selection_tool(args):
         - A set of local features. A local feature is an interesting region of
           the game where to extract fluents. After each selection, look at the
           terminal, because the region name and abbreviations are asked.
-    Terminate the selection with <esc> or <enter> on the selection tool,
+    Terminate the selection with <esc> or <enter> on the selector window,
     without any selection.
 
     :param args: namespace of arguments. See --help.
@@ -83,7 +90,6 @@ def selection_tool(args):
 
     # Select features
     print("> Select small local features")
-    selection = [0, 0, 1, 1]
     while True:
         selection = cv.selectROI("frame", image0)
 
@@ -107,15 +113,19 @@ def selection_tool(args):
     selections = selections_
 
     # Json format
-    data = {
+    regions = {
         name: {
             "abbrev": abbrev,
             "region": selection,
-            "fluents": {}
+            "fluents": [],
         } for name, abbrev, selection in zip(
             selection_names, selection_abbrev, selections)
     }
-    data["_frame"] = [box[0], box[1], box[0] + box[2], box[1] + box[3]]
+    data = {
+        "_frame": [box[0], box[1], box[0] + box[2], box[1] + box[3]],
+        "regions": regions,
+        "constraint": "true",
+    }
 
     # Save
     env_file = os.path.join(info_dir, env.spec.id + ".json")

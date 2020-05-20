@@ -103,11 +103,10 @@ class GeneticAlgorithm(ABC2):
         """Return whether a solution has been reached.
 
         Not all problems can easily tell whether a solution has been found.
-        Those can always return False.
+        Those can return always False.
 
-        :return: None, if training can continue, or an individual from
-            the population if training can stop and consider that as a
-            solution.
+        :return: -1, if training can continue, or a positive index of the
+            individual from the population to be considered as solution.
         """
 
     def mutate(self, population):
@@ -231,16 +230,12 @@ class GeneticAlgorithm(ABC2):
 
         return population, fitness
 
-    @tf.function
-    def train_step(self):
-        """One training step.
+    def apply(self, population, fitness):
+        """Update the model variables with updates.
 
-        Graph execution of the ops defined above.
+        :param population: list of individuals
+        :param fitness: their computed fitness value
         """
-
-        # Compute new
-        population, fitness = self.compute_train_step(
-            self.population, self.fitness)
 
         # Store
         self.population.assign(population)
@@ -287,7 +282,7 @@ class BooleanRulesGA(GeneticAlgorithm):
     def have_solution(self):
         """Cannot tell because it's unsupervised."""
 
-        return None
+        return -1
 
 
 class QueensGA(GeneticAlgorithm):
@@ -355,6 +350,6 @@ class QueensGA(GeneticAlgorithm):
 
         solutions = tf.where(self.fitness == self._n_pairs)[:, 0]
         if tf.shape(solutions)[0] > 0:
-            return self.population[solutions[0]]
+            return tf.cast(solutions[0], dtype=tf.int32)
         else:
-            return None
+            return -1
