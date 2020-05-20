@@ -967,48 +967,52 @@ class GeneticModel(Model):
         # Store
         self.ga = ga
 
-        # Init
-        model = self.GALayer(ga)
+        # Register the variables
+        model = tf.Module(name="GeneticModel")
+        model.vars = [self.ga.population, self.ga.fitness]
 
         # Save
         self.model = model
         self.computed_gradient = False
-        self.train_step = self.ga.train_step
-
-    class GALayer(BaseLayer):
-        """Layer wrapper around genetic algorithms."""
-
-        def __init__(self, ga, **layer_kwargs):
-
-            BaseLayer.__init__(self, **layer_kwargs)
-            self._vars = [ga.population, ga.fitness]
-            self._forward = ga.compute_train_step
-            self.built = True
-
-        def call(self, inputs):
-
-            return self._forward(*inputs)
-
-    def predict(self, inputs):
-        """Make a prediction with the model."""
-
-        raise NotImplementedError(
-            "A generic GeneticAlgorithm is not a I/O model")
 
     def compute_all(self, inputs):
         """Nothing to compute. Just show the training graph."""
 
         population, fitness = self.ga.compute_train_step(*inputs)
         mean_fitness = tf.math.reduce_mean(fitness)
+        max_fitness = tf.math.reduce_max(fitness)
 
         # Ret
         ret = dict(
             outputs=[population, fitness],
             loss=None,
-            metrics=dict(mean_fitness=mean_fitness),
+            metrics=dict(
+                mean_fitness=mean_fitness,
+                max_fitness=max_fitness,
+            ),
             gradients=None,
         )
         return ret
+
+    @tf.function
+    def train_step(self):
+        """Custom training step."""
+
+        # Compute
+        inputs = (self.ga.population, self.ga.fitness)
+        outputs = self.compute_all(inputs)
+
+        # Apply
+        population, fitness = outputs["outputs"]
+        self.ga.apply(population, fitness)
+
+        return outputs
+
+    def predict(self, inputs):
+        """Make a prediction with the model."""
+
+        raise NotImplementedError(
+            "A generic GeneticAlgorithm is not a I/O model")
 
     def images(self, outputs):
         """Returns a set of images to visualize."""
@@ -1018,16 +1022,33 @@ class GeneticModel(Model):
     def histograms(self, outputs):
         """Returns a set of tensors to visualize as histograms."""
 
-        # Visualizing population sparsity with 1D PCA
+        # Visualizing population sparsity with (1D pca for each individual)
         population = tf.cast(outputs[0], dtype=tf.float32)
         population = tf.reshape(population, shape=(population.shape[0], -1))
-        s, u, v = tf.linalg.svd(population)
-        population_1d = u[:, 0] * s[0]
+
+            # Standardinzation (per features, not per individual)
+        mean = tf.math.reduce_mean(population, axis=1, keepdims=True)
+        var = tf.math.reduce_variance(population, axis=1, keepdims=True)
+        pop_std = (population - mean) / tf.math.sqrt(var)
+
+            # Svd
+        s, u, v = tf.linalg.svd(pop_std)
+        singv = u[:, 0]
+            # Flip basis
+        if hasattr(self, "_last_svd_singv"):
+            diff_plus = tf.math.reduce_sum(
+                tf.math.abs(singv - self._last_svd_singv))
+            diff_minus = tf.math.reduce_sum(
+                tf.math.abs(-singv - self._last_svd_singv))
+            if diff_minus < diff_plus:
+                singv = -singv
+        self._last_svd_singv = singv
+        population_pca = singv * s[0]
 
         # Histograms
         tensors = {
             "fitness": outputs[1],
-            "population_1d": population_1d,
+            "population_pca": population_pca,
         }
 
         return tensors

@@ -8,8 +8,6 @@ Agent:
 
 Features:
 	Todo next:
-		- Tensorflow 2.2
-		- Train the second RBN of the DBN.
 		- New Genetic Algorithm for boolean rules
 	Todo later/maybe:
 
@@ -17,5 +15,5 @@ Done:
 	- Simple autoencoder
 	- Atari Breakout Player
 	- Collected frames from trained player or during training
-	- RBM
+	- DBN
 	- GA
