@@ -5,17 +5,20 @@
     152,
     197
   ],
-  "blue_right": {
-    "abbrev": "br",
-    "fluents": {
-			"br_full": "true",
-			"br_empty": "true"
-		},
-    "region": [
-      32,
-      87,
-      152,
-      93
-    ]
-  }
+	"regions": {
+		"blue_right": {
+			"abbrev": "br",
+			"fluents": [
+				"br_full",
+				"br_empty"
+			],
+			"region": [
+				32,
+				87,
+				152,
+				93
+			]
+		}
+	},
+	"constraint": "true"
 }

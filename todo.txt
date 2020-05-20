@@ -8,6 +8,7 @@ Agent:
 
 Features:
 	Todo next:
+		- Tensorflow 2.2
 		- Train the second RBN of the DBN.
 		- New Genetic Algorithm for boolean rules
 	Todo later/maybe:

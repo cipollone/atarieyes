@@ -1,7 +1,6 @@
 """Definitions of networks used for feature extraction."""
 
 from abc import abstractmethod
-from collections import OrderedDict
 import numpy as np
 import gym
 import tensorflow as tf
@@ -220,7 +219,7 @@ class BinaryRBM(Model):
         # Register the variables
         model = tf.Module(name="BinaryRBM")
         model.vars = [                           # Fix an order
-            getattr(self.layers, v) for v in 
+            getattr(self.layers, v) for v in
             ("_W", "_bv", "_bh", "_h_distribution", "_saved_v")]
         assert len(model.variables) == len(self.layers.variables)
         assert len(model.trainable_variables) == len(
@@ -836,47 +835,51 @@ class Fluents(Model):
 
         # Read all regions
         env_data = selector.read_back(self._env_name)
-        env_data.pop("_frame")
-        self._region_names = list(env_data.keys())
-        try:
-            self._training_i = self._region_names.index(self._training_region)
-        except ValueError:
+        regions_data = env_data["regions"]
+        self._region_names = list(regions_data.keys())
+        if self._training_region not in self._region_names:
             raise ValueError(
                 str(self._training_region) +
                 " not in " + str(self._region_names))
 
-        # Collect fluents and their specification
-        self.fluents = OrderedDict()
-        for region_name in env_data:
-            region = env_data[region_name]
-            for fluent_name in region["fluents"]:
+        # Order matters: prediction must be unambiguous
+        self._region_names.sort()
 
-                if not fluent_name.startswith(region["abbrev"] + "_"):
+        # Collect fluents and their specification
+        self.fluents = []
+        for region_name in self._region_names:
+            region = regions_data[region_name]
+
+            for fluent_name in region["fluents"]:
+                prefix = region["abbrev"] + "_"
+                if not fluent_name.startswith(prefix):
                     raise ValueError(
-                        '"fluent0" for region abbrev "b" must be called '
-                        '"b_fluent0"')
-                self.fluents[fluent_name] = region["fluents"][fluent_name]
+                        fluent_name + " must start with prefix " + prefix)
+                self.fluents.append(fluent_name)
 
         # One encoding for each region
-        self.local_features = [
-            LocalFeatures(
+        self.local_features = {
+            region: LocalFeatures(
                 env_name=self._env_name, region=region,
                 dbn_spec=self._dbn_spec, training_layer=(
                     self._training_layer if self._training_region == region
                     else None),
             ) for region in self._region_names
-        ]
+        }
 
         # NOTE: last layer is still missing because it should be different.
 
         # Register the variables
         model = tf.Module(name="Fluents")
-        model.layers = [f.model for f in self.local_features]
+        for region in self._region_names:
+            namespace = "region_" + region
+            setattr(model, namespace, self.local_features[region].model)
         assert len(model.variables) == sum(
-            [len(inner.model.variables) for inner in self.local_features])
+            [len(inner.model.variables)
+                for inner in self.local_features.values()])
         assert len(model.trainable_variables) == sum(
             [len(inner.model.trainable_variables)
-                for inner in self.local_features])
+                for inner in self.local_features.values()])
 
         # Save
         self.model = model
@@ -889,8 +892,8 @@ class Fluents(Model):
         # The first is the output of a prediction
         prediction = self.predict(inputs)
 
-        # Then training data follow
-        ret = self.local_features[self._training_i].compute_all(inputs)
+        # Then, training data follow
+        ret = self.local_features[self._training_region].compute_all(inputs)
 
         # Merge
         ret["outputs"].insert(0, prediction)
@@ -904,8 +907,10 @@ class Fluents(Model):
         """
 
         predictions = [
-            region.predict(inputs) for region in self.local_features]
+            self.local_features[region].predict(inputs)
+            for region in self._region_names]
         predictions = tf.concat(predictions, axis=1)
+
         return predictions
 
     def images(self, outputs):
@@ -916,11 +921,10 @@ class Fluents(Model):
 
         # Collect all images and add a namescope
         all_imgs = {}
-        for region in self.local_features:
-            imgs = region.images(outputs)
+        for region in self._region_names:
+            imgs = self.local_features[region].images(outputs)
             imgs = {
-                region._region_name + "/" + name: img
-                for name, img in imgs.items()}
+                region + "/" + name: img for name, img in imgs.items()}
             all_imgs.update(imgs)
 
         return all_imgs
@@ -933,11 +937,10 @@ class Fluents(Model):
 
         # Collect all histograms and add a namescope
         all_hists = {}
-        for region in self.local_features:
-            hists = region.histograms(outputs)
+        for region in self._region_names:
+            hists = self.local_features[region].histograms(outputs)
             hists = {
-                region._region_name + "/" + name: hist
-                for name, hist in hists.items()}
+                region + "/" + name: hist for name, hist in hists.items()}
             all_hists.update(hists)
 
         return all_hists

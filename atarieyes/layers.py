@@ -289,7 +289,7 @@ class CropToEnv(BaseLayer):
         # Load the selection
         env_data = selector.read_back(env_name)
         box = env_data[region] if region == "_frame" \
-            else env_data[region]["region"]
+            else env_data["regions"][region]["region"]
 
         # Set
         self._box_slice_w = slice(box[0], box[2])
