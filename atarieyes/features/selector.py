@@ -25,7 +25,7 @@ environment. This is an example:
           ]
         }
       },
-      "constraint": "true"
+      "constraints": []
     }
 
 "_frame" contains the coordinates of a large crop of the entire frame
@@ -35,11 +35,14 @@ for the only defined region (it could be any name). "region" holds
 the coordinates for its crop. "fluents" holds a list of symbols. Each of them
 is a propositional atom that is evaluated on this region. All flents must
 be named with a prefix of the region ("abbrev") + underscore + any name.
-Finally, "constraint" is a temporal LDLf formula that declares how the fluents
-you define are expected to change and how are they related with each other.
+Finally, "constraints" is a list of temporal LDLf formulae that declares how
+the fluents you define are expected to change and how are they related with
+each other. All the expessions are merged and joined in a single conjunction.
+I keep them as a list here just because it might be easier to read them
+(use parentheses if uncertain).
 
 The selector tool of this module allows to write all fields except "fluents"
-and "constraint" which you can easily add manually to the json file.
+and "constraints" which you can easily add manually to the json file.
 """
 
 import gym
@@ -124,7 +127,7 @@ def selection_tool(args):
     data = {
         "_frame": [box[0], box[1], box[0] + box[2], box[1] + box[3]],
         "regions": regions,
-        "constraint": "true",
+        "constraints": [],
     }
 
     # Save
