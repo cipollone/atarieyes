@@ -4,9 +4,9 @@ Pythomata is the representation I adopt. This module define tools for a more
 efficient execution in tensorflow.
 """
 
-from pythomata.simulator import AbstractSimulator
 from pythomata.impl.symbolic import SymbolicAutomaton
 import numpy as np
+import tensorflow as tf
 
 
 class TfSymbolicAutomaton:
@@ -15,6 +15,9 @@ class TfSymbolicAutomaton:
     This representation stores the description of a SymbolicAutomaton with
     static arrays. It should be easier to simulate this automaton with
     Tensorflow ops.
+
+    NOTE: this implementation is not efficient. Memory and time required are
+    exponential in len(atoms).
     """
 
     def __init__(self, automaton, atoms, verbose=True):
@@ -47,14 +50,14 @@ class TfSymbolicAutomaton:
 
         # Transform transitions from symbolic to atomic
         #   Storing transitions as single vectors:
-        #   [from_state, to_state, atom0_value, ..., atomN_value]
+        #   [from_state, atom0_value, ..., atomN_value, to_state]
         self.transitions = []
         for state in self.states:
             for symbol in self._all_interpretations():
                 successor = self.pythomaton.get_successor(state, symbol)
                 array_symbol = [int(symbol[atom]) for atom in self.atoms]
                 self.transitions.append(
-                    np.concatenate(([state], [successor], array_symbol)))
+                    np.concatenate(([state], array_symbol, [successor])))
         self.transitions = np.array(self.transitions)
 
         if verbose:
@@ -74,6 +77,56 @@ class TfSymbolicAutomaton:
             yield interpretation
 
 
-class TfSymbolicSimulator(AbstractSimulator):
-    """Execution of symbolic automata with Tensorflow."""
-    pass
+class TfSymbolicSimulator:
+    """Execution of symbolic automata with Tensorflow.
+
+    This class can simulate many instances of the same automaton in parallel.
+    """
+
+    def __init__(self, automaton, n_instances=1):
+        """Initialize.
+
+        :param automaton: a TfSymbolicAutomaton
+        :param n_instances: number of parallel simulations
+        """
+
+        # Store
+        self.automaton = automaton       # type: TfSymbolicAutomaton
+        self.n_instances = n_instances
+
+        # Check
+        if not isinstance(self.automaton, TfSymbolicAutomaton):
+            raise TypeError("Automaton must be a TfSymbolicAutomaton")
+
+        # Current state for each instance
+        self.curr_states = tf.Variable(
+            np.full([self.n_instances], -1, dtype=np.int32), trainable=False)
+
+        # Ready to go
+        self.reset()
+
+    def reset(self):
+        """Resets all instances to the initial state.
+
+        :return: the current states
+        """
+
+        self.curr_states.assign(
+            tf.broadcast_to(self.automaton.initial_state, [self.n_instances]))
+
+        return self.curr_states
+
+    def step(self, symbols):
+        """Move all instances.
+
+        :param symbols: one batch of symbols of shape [n_instances, n_atoms].
+            Values can be 0 or 1.
+        :return: The current states
+        """
+
+        # Values are not checked
+        assert symbols.shape == [self.n_instances, len(self.automaton.atoms)]
+
+        # Find arcs
+        state_and_symbol = tf.concat((self.curr_states, symbols), axis=0)
+
