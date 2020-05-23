@@ -78,21 +78,32 @@ class TemporalConstraints:
         # Automaton parallel execution
         self._tf_automata = TfSymbolicAutomaton(self._automaton, self.fluents)
 
+        # Prepare buffers
+        self._current_states = tf.Variable(
+            tf.zeros([self._n_functions], dtype=tf.int32),
+            trainable=False, name="current_states")
+        self._final_counts = tf.Variable(
+            tf.zeros([self._n_functions, len(self._tf_automata.final_states)],
+                dtype=tf.int32),
+            trainable=False, name="final_counts_buffer")
+        self._timestep = tf.Variable(0, trainable=False, name="timestep")
+
         # Ready for a new run
         self._reset()
 
     def _reset(self):
         """Reset variables for a new run."""
 
-        self._current_states = self._tf_automata.initial_states(
-            self._n_functions)
+        self._current_states.assign(
+            self._tf_automata.initial_states(self._n_functions))
 
-        self._consistency_accumulator = tf.zeros(
-            shape=[self._n_functions], dtype=tf.int32)
-        self._sensitivity_accumulator = tf.zeros(
-            shape=[self._n_functions], dtype=tf.int32)
-        self._timestep = 0
+        self._final_counts.assign(
+            tf.zeros([self._n_functions, len(self._tf_automata.final_states)],
+            dtype=tf.int32)
+        )
+        self._timestep.assign(0)
 
+    @tf.function
     def observe(self, values):
         """Observe a list of predicted values for all fluents.
 
@@ -109,15 +120,18 @@ class TemporalConstraints:
         assert values.shape == (self._n_functions, self._n_fluents)
 
         # Move the automata
-        self._current_states = self._tf_automata.successors(
-            self._current_states, values)
+        self._current_states.assign(
+            self._tf_automata.successors(self._current_states, values))
 
-        # Consistency: count the number of final states traversed
-        final_check = self._tf_automata.is_final(self._current_states)
-        self._consistency_accumulator += tf.cast(final_check, dtype=tf.int32)
+        # Save if final states
+        final_check = (
+            tf.expand_dims(self._current_states, -1) ==
+                tf.expand_dims(self._tf_automata.final_states, 0))
+        self._final_counts.assign_add(tf.cast(final_check, dtype=tf.int32))
 
-        self._timestep += 1
+        self._timestep.assign_add(1)
 
+    @tf.function
     def compute(self):
         """Signal the end of the trace and compute the metrics.
 
@@ -125,21 +139,27 @@ class TemporalConstraints:
         It also computes the score on the metrics for each of the n functions.
 
         The metrics are:
-            1- consistency. Rate of observations spent on final states.
-            2- sensitivity. Rate of reached final states.
+            1- consistency. Fraction of time spent on final states.
+            2- sensitivity. Fraction of final states reached.
 
-        :return: a list of metrics; each is a tensor of shape [n_functions].
+        :return: consistency, sensitivity
         """
 
         # Check
         if self._timestep == 0:
             consistency = tf.zeros(shape=[self._n_functions], dtype=tf.float64)
-            return consistency
+            sensitivity = tf.zeros_like(consistency)
+            return consistency, sensitivity
 
         # Compute consistency
-        consistency = self._consistency_accumulator / self._timestep
+        final_steps = tf.math.reduce_sum(self._final_counts, axis=1)
+        consistency = final_steps / self._timestep
+
+        # Compute sensitivity
+        final_reached = tf.math.count_nonzero(self._final_counts, axis=1)
+        sensitivity = final_reached / len(self._tf_automata.final_states)
 
         # Reset
         self._reset()
 
-        return consistency
+        return consistency, sensitivity
