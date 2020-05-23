@@ -20,5 +20,11 @@
 			]
 		}
 	},
-	"constraint": "true"
+	"constraints": [
+		"(br_full & !br_empty)",
+		"[true*](!br_full | !br_empty)",
+		"!<true*; br_full>br_empty",
+		"!<true*; !br_full; true*>(br_full & !end)",
+		"!<true*; br_empty; true*>(!br_empty & !end)"
+	]
 }

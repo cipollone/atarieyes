@@ -1026,15 +1026,15 @@ class GeneticModel(Model):
         population = tf.cast(outputs[0], dtype=tf.float32)
         population = tf.reshape(population, shape=(population.shape[0], -1))
 
-            # Standardinzation (per features, not per individual)
+        #   Standardinzation (per features, not per individual)
         mean = tf.math.reduce_mean(population, axis=1, keepdims=True)
         var = tf.math.reduce_variance(population, axis=1, keepdims=True)
         pop_std = (population - mean) / tf.math.sqrt(var)
 
-            # Svd
+        #   Svd
         s, u, v = tf.linalg.svd(pop_std)
         singv = u[:, 0]
-            # Flip basis
+        #   Flip basis
         if hasattr(self, "_last_svd_singv"):
             diff_plus = tf.math.reduce_sum(
                 tf.math.abs(singv - self._last_svd_singv))
