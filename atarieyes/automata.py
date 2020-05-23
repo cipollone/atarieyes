@@ -12,8 +12,10 @@ class TfSymbolicAutomaton:
     This representation stores the description of a SymbolicAutomaton with
     static arrays. It can be used to simulate many runs in parallel.
 
-    NOTE: This implementation is not efficient. Memory and time required
+    NOTE: This implementation is not memory efficient. Memory and time required
     during the initialization step are exponential in len(atoms).
+    This is proportional to the number of symbols of the DFA, btw.
+    Likely, the same cost would be spent when building the input automaton.
     """
 
     def __init__(self, automaton, atoms, verbose=True):
@@ -136,7 +138,7 @@ class TfSymbolicAutomaton:
         :param n_instances: batch size
         :return: a one dimensional tesor of initial states
         """
-        
+
         return tf.broadcast_to([self.initial_state], [n_instances])
 
     @tf.function
@@ -151,4 +153,3 @@ class TfSymbolicAutomaton:
             tf.expand_dims(states, -1) == tf.expand_dims(self.final_states, 0))
         checks = tf.reduce_any(checks, axis=1)
         return checks
-        

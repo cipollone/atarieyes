@@ -7,10 +7,10 @@ or constraints, of the symbols.
 from flloat.parser.ldlf import LDLfParser
 from flloat.ldlf import LDLfFormula
 from pythomata.impl.symbolic import SymbolicAutomaton
-from pythomata.simulator import AutomatonSimulator
 import tensorflow as tf
 
 from atarieyes.features import selector
+from atarieyes.automata import TfSymbolicAutomaton
 
 
 class TemporalConstraints:
@@ -49,7 +49,7 @@ class TemporalConstraints:
 
         # Check: all atoms must be evaluated
         atoms = formula.find_labels()
-        all_predicted = all((l in fluents for l in atoms))
+        all_predicted = all((a in fluents for a in atoms))
         if not all_predicted:
             raise ValueError(
                 "One of the atoms " + str(atoms) + " is not in fluents")
@@ -75,12 +75,23 @@ class TemporalConstraints:
         self._n_functions = n_functions
         self._n_fluents = len(self.fluents)
 
-        # Prepare all parallel simulators (automaton runners)
-        # TODO: how? all in python?
-        self._simulators = [
-            AutomatonSimulator(self._automaton)
-            for i in range(self._n_functions)
-        ]
+        # Automaton parallel execution
+        self._tf_automata = TfSymbolicAutomaton(self._automaton, self.fluents)
+
+        # Ready for a new run
+        self._reset()
+
+    def _reset(self):
+        """Reset variables for a new run."""
+
+        self._current_states = self._tf_automata.initial_states(
+            self._n_functions)
+
+        self._consistency_accumulator = tf.zeros(
+            shape=[self._n_functions], dtype=tf.int32)
+        self._sensitivity_accumulator = tf.zeros(
+            shape=[self._n_functions], dtype=tf.int32)
+        self._timestep = 0
 
     def observe(self, values):
         """Observe a list of predicted values for all fluents.
@@ -98,6 +109,14 @@ class TemporalConstraints:
         assert values.shape == (self._n_functions, self._n_fluents)
 
         # Move the automata
+        self._current_states = self._tf_automata.successors(
+            self._current_states, values)
+
+        # Consistency: count the number of final states traversed
+        final_check = self._tf_automata.is_final(self._current_states)
+        self._consistency_accumulator += tf.cast(final_check, dtype=tf.int32)
+
+        self._timestep += 1
 
     def compute(self):
         """Signal the end of the trace and compute the metrics.
@@ -111,4 +130,16 @@ class TemporalConstraints:
 
         :return: a list of metrics; each is a tensor of shape [n_functions].
         """
-        pass
+
+        # Check
+        if self._timestep == 0:
+            consistency = tf.zeros(shape=[self._n_functions], dtype=tf.float64)
+            return consistency
+
+        # Compute consistency
+        consistency = self._consistency_accumulator / self._timestep
+
+        # Reset
+        self._reset()
+
+        return consistency
