@@ -88,13 +88,16 @@ class GeneticAlgorithm(ABC2):
         """
 
     @abstractmethod
-    def sample_symbols(self, n):
+    def sample_symbols(self, n, positions):
         """Sample n new symbols randomly.
 
         Each individual is made of a sequence of symbols. This function
         samples on that space.
 
         :param n: number of symbols to sample
+        :param positions: position of each symbol to sample on the indidivual
+            encoding. This could be useful if different symbols would need
+            to be sampled differently.
         :return: a 2D Tensor; a sequence of symbols
         """
 
@@ -123,7 +126,8 @@ class GeneticAlgorithm(ABC2):
         n_mutations = tf.shape(mutations_idx)[0]
 
         # Sampling
-        sampled = self.sample_symbols(n_mutations)
+        sampled = self.sample_symbols(
+            n_mutations, positions=mutations_idx[:, 1])
 
         # Apply
         updates = tf.scatter_nd(
@@ -246,9 +250,12 @@ class BooleanRulesGA(GeneticAlgorithm):
     """Genetic algorithm for Boolean functions.
 
     The biggest assumption made by this class is that the target concept
-    is representable as a boolean expression of NOT, AND only.
-    Each individual is a vector of constraints on the input. Each symbol
-    has the following meaning: -1 don't care, 0 must be false, 1 must be true.
+    is representable as a boolean expression of NOT and AND only.  Each
+    individual is represents a rule. A 0-rule is a vector that starts with a 0
+    and is followed by a sequence of constraints. When the constraints are
+    satisfacted, the output is 0 otherwise is 1. Similarly for a 1-rule.
+    Constraints are vectors of values in {-1, 0, 1}, with the following
+    meaning: -1 don't care, 0 must be false, 1 must be true.
     """
 
     def __init__(self, n_inputs, **kwargs):
@@ -267,17 +274,32 @@ class BooleanRulesGA(GeneticAlgorithm):
     def initial_population(self):
         """Generate the initial population."""
 
-        population = tf.random.uniform(
-            (self.n_individuals, self._n_inputs, 1), -1, 2, dtype=tf.int32)
-        return tf.cast(population, tf.int8)
+        total_samples = self.n_individuals * (self._n_inputs + 1)
+        positions = tf.tile(tf.range(self._n_inputs + 1), [self.n_individuals])
 
-    # TODO: compute_fitness
+        sampled = self.sample_symbols(total_samples, positions=positions)
+        population = tf.reshape(
+            sampled, (self.n_individuals, -1, tf.shape(sampled)[-1]))
 
-    def sample_symbols(self, n):
+        return population
+
+    def sample_symbols(self, n, positions):
         """Sample random symbols."""
 
-        sampled = tf.random.uniform((n, 1), -1, 2, dtype=tf.int32)
+        # Sampling
+        rule_type_samples = tf.random.uniform((n, 1), 0, 2, dtype=tf.int32)
+        constraint_samples = tf.random.uniform((n, 1), -1, 2, dtype=tf.int32)
+
+        # Collect
+        positions = tf.expand_dims(positions, -1)
+        rule_symbols = (positions == 0)
+        sampled = tf.where(rule_symbols, rule_type_samples, constraint_samples)
+
         return tf.cast(sampled, tf.int8)
+
+    def compute_fitness(self, population):
+        # TODO
+        return tf.zeros(population.shape[0], dtype=tf.float32)
 
     def have_solution(self):
         """Cannot tell because it's unsupervised."""
@@ -308,7 +330,7 @@ class QueensGA(GeneticAlgorithm):
             (self.n_individuals, self._size, 1), 0, self._size, dtype=tf.int32)
         return positions
 
-    def sample_symbols(self, n):
+    def sample_symbols(self, n, positions):
 
         sampled = tf.random.uniform((n, 1), 0, self._size, dtype=tf.int32)
         return sampled
