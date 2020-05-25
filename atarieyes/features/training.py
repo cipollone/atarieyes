@@ -426,7 +426,10 @@ def agent_player(env_name, ip="localhost"):
     # Collect
     try:
         while True:
-            yield receiver.receive(wait=True)
+            frame, termination = receiver.receive(wait=True)
+            if termination == "repeated_last":
+                continue
+            yield frame
 
     except ConnectionAbortedError:
         raise StopIteration
