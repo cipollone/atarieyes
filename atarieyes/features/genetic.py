@@ -256,17 +256,24 @@ class BooleanRulesGA(GeneticAlgorithm):
     satisfacted, the output is 0 otherwise is 1. Similarly for a 1-rule.
     Constraints are vectors of values in {-1, 0, 1}, with the following
     meaning: -1 don't care, 0 must be false, 1 must be true.
+
+    The fitness function of the boolean functions is defined with respect to
+    a specification in temporal logic. See the temporal module.
     """
 
-    def __init__(self, n_inputs, **kwargs):
+    def __init__(self, n_inputs, constraints, **kwargs):
         """Initialize.
 
         :param n_inputs: lenght of the binary input vector.
+        :param constraints: temporal.TemporalConstraints instance.
         :param kwargs: GeneticAlgorithm params.
         """
 
         # Store
         self._n_inputs = n_inputs
+        self._constraint = constraints
+
+        # TODO: type check
 
         # Super
         GeneticAlgorithm.__init__(self, **kwargs)
@@ -298,6 +305,19 @@ class BooleanRulesGA(GeneticAlgorithm):
         return tf.cast(sampled, tf.int8)
 
     def compute_fitness(self, population):
+        """Compute the fitness function.
+
+        See this class docstring and the temporal module.
+        """
+
+        # Compute the predictions of all individuals
+
+        # Run an entire trace/episode
+
+        # Compute the metrics
+
+        # Compose the fitness function
+
         # TODO
         return tf.zeros(population.shape[0], dtype=tf.float32)
 
@@ -305,6 +325,43 @@ class BooleanRulesGA(GeneticAlgorithm):
         """Cannot tell because it's unsupervised."""
 
         return -1
+
+    def _predict_with_rules(self, population, inputs):
+        """Make a batch of predictions with the current population.
+
+        From an input boolean vector, compute a batch of boolean
+        output scalars using the boolean rules in population.
+        See this class' docstring for help on population.
+
+        :param population: a batch of individuals
+        :param inputs: a boolean vector (0s and 1s) of integer type.
+        :return: a batch of predictions. Each individual represents
+            a different boolean function.
+        """
+
+        # Prepare shapes
+        population = tf.reshape(population,
+            (self.n_individuals, self.n_symbols))
+        rule_types = population[:, 0]
+        constraints = population[:, 1:]
+        inputs = tf.expand_dims(inputs, 0)     # Broadcast for all rules
+
+        # Check
+        inputs = tf.cast(inputs, tf.int8)
+        assert inputs.shape == [1, self._n_inputs]
+
+        # Which constraints are satisfacted
+        equals = (constraints == inputs)
+        dont_care = (constraints == -1)
+        symbols_sat = tf.where(dont_care, True, equals)
+        inputs_sat = tf.reduce_all(symbols_sat, axis=1)
+
+        # Which rules are satisfacted
+        rules_sat = tf.where(rule_types == 1,
+            inputs_sat, tf.math.logical_not(inputs_sat))
+        predictions = tf.cast(rules_sat, dtype=tf.int8)
+
+        return predictions
 
 
 class QueensGA(GeneticAlgorithm):

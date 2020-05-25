@@ -83,7 +83,8 @@ class TemporalConstraints:
             tf.zeros([self._n_functions], dtype=tf.int32),
             trainable=False, name="current_states")
         self._final_counts = tf.Variable(
-            tf.zeros([self._n_functions, len(self._tf_automata.final_states)],
+            tf.zeros(
+                [self._n_functions, len(self._tf_automata.final_states)],
                 dtype=tf.int32),
             trainable=False, name="final_counts_buffer")
         self._timestep = tf.Variable(0, trainable=False, name="timestep")
@@ -98,9 +99,9 @@ class TemporalConstraints:
             self._tf_automata.initial_states(self._n_functions))
 
         self._final_counts.assign(
-            tf.zeros([self._n_functions, len(self._tf_automata.final_states)],
-            dtype=tf.int32)
-        )
+            tf.zeros(
+                [self._n_functions, len(self._tf_automata.final_states)],
+                dtype=tf.int32))
         self._timestep.assign(0)
 
     @tf.function
@@ -126,7 +127,7 @@ class TemporalConstraints:
         # Save if final states
         final_check = (
             tf.expand_dims(self._current_states, -1) ==
-                tf.expand_dims(self._tf_automata.final_states, 0))
+            tf.expand_dims(self._tf_automata.final_states, 0))
         self._final_counts.assign_add(tf.cast(final_check, dtype=tf.int32))
 
         self._timestep.assign_add(1)
