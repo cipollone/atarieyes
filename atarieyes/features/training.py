@@ -44,17 +44,24 @@ class Trainer:
             args.batch_size, self.frame_shape, args.shuffle)
         self.dataset_it = iter(dataset)
 
-        # Model
-        network_spec = [dict(
+        # Model hyper-parameters
+        encoding_spec = [dict(
                 n_hidden=units, batch_size=args.batch_size,
                 l2_const=args.l2_const, sparsity_const=args.sparsity_const,
                 sparsity_target=args.sparsity_target,
             ) for units in args.network_size
         ]
+        genetic_spec = dict(
+            n_individuals=args.population_size, mutation_p=args.mutation_p)
+
+        # Model
         self.model = models.Fluents(
-            env_name=args.env, dbn_spec=network_spec,
-            training_region=args.train_region_layer[0],
+            env_name=args.env,
+            dbn_spec=encoding_spec,
+            ga_spec=genetic_spec,
             training_layer=int(args.train_region_layer[1]),
+            training_region=args.train_region_layer[0],
+            logdir=log_path,
         )
 
         # Optimization

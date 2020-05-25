@@ -47,9 +47,10 @@ class GeneticAlgorithm(ABC2):
             self.compute_fitness(self.population), trainable=False,
             name="Fitness_var")
 
-        assert self.population.shape.ndims == 3 and \
-            self.population.shape[0] == n_individuals, \
-            "Expecting 3D shape: (individuals, symbols, symbol_len)"
+        assert (
+            self.population.shape.ndims == 3 and
+            self.population.shape[0] == n_individuals), (
+            "Expecting 3D shape: (individuals, symbols, symbol_len)")
 
         # Constants
         self.n_symbols = self.population.shape[1]
@@ -273,8 +274,6 @@ class BooleanRulesGA(GeneticAlgorithm):
         self._n_inputs = n_inputs
         self._constraint = constraints
 
-        # TODO: type check
-
         # Super
         GeneticAlgorithm.__init__(self, **kwargs)
 
@@ -319,7 +318,7 @@ class BooleanRulesGA(GeneticAlgorithm):
         # Compose the fitness function
 
         # TODO
-        return tf.zeros(population.shape[0], dtype=tf.float32)
+        return tf.ones(population.shape[0], dtype=tf.float32)
 
     def have_solution(self):
         """Cannot tell because it's unsupervised."""
@@ -340,8 +339,7 @@ class BooleanRulesGA(GeneticAlgorithm):
         """
 
         # Prepare shapes
-        population = tf.reshape(population,
-            (self.n_individuals, self.n_symbols))
+        population = tf.reshape(population, (-1, self.n_symbols))
         rule_types = population[:, 0]
         constraints = population[:, 1:]
         inputs = tf.expand_dims(inputs, 0)     # Broadcast for all rules
@@ -357,11 +355,39 @@ class BooleanRulesGA(GeneticAlgorithm):
         inputs_sat = tf.reduce_all(symbols_sat, axis=1)
 
         # Which rules are satisfacted
-        rules_sat = tf.where(rule_types == 1,
-            inputs_sat, tf.math.logical_not(inputs_sat))
+        rules_sat = tf.where(
+            rule_types == 1, inputs_sat, tf.math.logical_not(inputs_sat))
         predictions = tf.cast(rules_sat, dtype=tf.int8)
 
         return predictions
+
+    def predict(self, inputs):
+        """Make a prediction with the fittest individual.
+
+        See _predict_with_rules for info about predictions.
+        This function predicts just with one individual.
+
+        :param inputs: a batch of input boolean vectors.
+        :return: a batch of predictions (one for each input vector)
+        """
+
+        # Best individual
+        fittest = self.population[tf.math.argmax(self.fitness)]
+        population_of1 = tf.expand_dims(fittest, 0)
+
+        # Predict for all inputs
+        batch_size = tf.shape(inputs)[0]
+        batch_population = tf.broadcast_to(
+            tf.expand_dims(population_of1, 0),
+            tf.concat(([batch_size], tf.shape(population_of1)), axis=0)
+        )
+        prediction = tf.map_fn(
+            lambda elems: self._predict_with_rules(elems[0], elems[1]),
+            elems=[batch_population, inputs],
+            dtype=tf.int8,
+        )
+
+        return prediction
 
 
 class QueensGA(GeneticAlgorithm):

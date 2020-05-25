@@ -8,7 +8,6 @@ Agent:
 
 Features:
 	Todo next:
-		- New Genetic Algorithm for boolean rules
 	Todo later/maybe:
 
 Done:
@@ -17,3 +16,4 @@ Done:
 	- Collected frames from trained player or during training
 	- DBN
 	- GA
+	- Boolean rules
