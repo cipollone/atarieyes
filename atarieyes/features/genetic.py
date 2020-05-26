@@ -250,29 +250,24 @@ class GeneticAlgorithm(ABC2):
 class BooleanRulesGA(GeneticAlgorithm):
     """Genetic algorithm for Boolean functions.
 
-    The biggest assumption made by this class is that the target concept
-    is representable as a boolean expression of NOT and AND only.  Each
-    individual is represents a rule. A 0-rule is a vector that starts with a 0
-    and is followed by a sequence of constraints. When the constraints are
-    satisfacted, the output is 0 otherwise is 1. Similarly for a 1-rule.
-    Constraints are vectors of values in {-1, 0, 1}, with the following
-    meaning: -1 don't care, 0 must be false, 1 must be true.
-
-    The fitness function of the boolean functions is defined with respect to
-    a specification in temporal logic. See the temporal module.
+    This class learns a single boolean function. The biggest assumption  is
+    that the target concept is representable as a boolean expression of NOT and
+    AND only. Each individual represents a rule. A 0-rule is a vector that
+    starts with a 0 and is followed by a sequence of constraints. When the
+    constraints are satisfacted, the output is 0 otherwise is 1. Similarly for
+    a 1-rule.  Constraints are vectors of values in {-1, 0, 1}, with the
+    following meaning: -1 don't care, 0 must be false, 1 must be true.
     """
 
-    def __init__(self, n_inputs, constraints, **kwargs):
+    def __init__(self, n_inputs, **kwargs):
         """Initialize.
 
         :param n_inputs: lenght of the binary input vector.
-        :param constraints: temporal.TemporalConstraints instance.
         :param kwargs: GeneticAlgorithm params.
         """
 
         # Store
         self._n_inputs = n_inputs
-        self._constraint = constraints
 
         # Super
         GeneticAlgorithm.__init__(self, **kwargs)
@@ -306,19 +301,11 @@ class BooleanRulesGA(GeneticAlgorithm):
     def compute_fitness(self, population):
         """Compute the fitness function.
 
-        See this class docstring and the temporal module.
+        I cannot compute the fitness of a boolean function individually.
         """
 
-        # Compute the predictions of all individuals
-
-        # Run an entire trace/episode
-
-        # Compute the metrics
-
-        # Compose the fitness function
-
-        # TODO
-        return tf.ones(population.shape[0], dtype=tf.float32)
+        raise NotImplementedError(
+            "I cannot compute the fitness of a boolean function individually.")
 
     def have_solution(self):
         """Cannot tell because it's unsupervised."""

@@ -810,9 +810,11 @@ class Fluents(Model):
     """Model for binary local features.
 
     This class is the outer Model: it represents all binary features (aka
-    fluents) defined in each Atari game.  Each environment has all fluents
-    defined in its json file: they are grouped in regions.
+    fluents) we define in each Atari game. Each environment has all fluents
+    defined in its json file; they are grouped in regions.
 
+    First all regions are encoded through a set of LocalFeatures.
+    Then, last layer extracts from 
     The first part is composed of a set of LocalFeatures, one for each region.
     Then, last layer evaluates all fluents.
 
@@ -821,6 +823,8 @@ class Fluents(Model):
     Also, the sender should not skip frames, because the exact sequence in each
     episode is important.
     """
+    # TODO: docstring!
+    # TODO: check class
 
     def __init__(
         self, env_name, dbn_spec, ga_spec, training_layer,
@@ -864,7 +868,7 @@ class Fluents(Model):
         # Order matters: prediction must be unambiguous
         self._region_names.sort()
 
-        # Collect fluents and their specification
+        # Collect all symbols (fluents) we have defined
         self.fluents = []
         for region_name in self._region_names:
             region = regions_data[region_name]
@@ -877,22 +881,27 @@ class Fluents(Model):
                 self.fluents.append(fluent_name)
 
         # One encoding for each region
-        self.local_features = {
+        self.encodings = {
             region: LocalFeatures(
-                env_name=self._env_name, region=region,
-                dbn_spec=self._dbn_spec, training_layer=(
+                env_name=self._env_name,
+                region=region,
+                dbn_spec=self._dbn_spec,
+                training_layer=(
                     self._training_layer if not self._training_last
                     and self._training_region == region else None),
             ) for region in self._region_names
         }
 
-        # Parse temporal constraints
+        # Load temporal constraints. These are common to all regions
         self._constraints = temporal.TemporalConstraints(
-            env_name=self._env_name, fluents=self.fluents,
-            n_functions=ga_spec["n_individuals"], logdir=logdir,
+            env_name=self._env_name,
+            fluents=self.fluents,
+            n_functions=ga_spec["n_individuals"],
+            logdir=logdir,
         ) if self._training_last else None
 
         # Last "layer" is a Genetic Algorithm
+        # TODO: use a model that already groups the boolean functions
         self._encoding_size = self._dbn_spec[-1]["n_hidden"]
         self.last_layer = GeneticModel(
             genetic.BooleanRulesGA(
@@ -906,17 +915,17 @@ class Fluents(Model):
         # Register the variables
         model = tf.Module(name="Fluents")
         for region in self._region_names:
-            namespace = "region_" + region
-            setattr(model, namespace, self.local_features[region].model)
+            namespace = "encoding_" + region
+            setattr(model, namespace, self.encodings[region].model)
         model.last_layer = self.last_layer.model
 
         assert len(model.variables) == (sum(
             [len(inner.model.variables)
-                for inner in self.local_features.values()]) +
+                for inner in self.encodings.values()]) +
             len(self.last_layer.model.variables))
         assert len(model.trainable_variables) == (sum(
             [len(inner.model.trainable_variables)
-                for inner in self.local_features.values()]) +
+                for inner in self.encodings.values()]) +
             len(self.last_layer.model.trainable_variables))
 
         # Save
@@ -941,7 +950,7 @@ class Fluents(Model):
         if self._training_last:
             ret = self.last_layer.compute_all(encoding)
         else:
-            training_model = self.local_features[self._training_region]
+            training_model = self.encodings[self._training_region]
             ret = training_model.compute_all(inputs)
 
         # Merge
@@ -964,7 +973,7 @@ class Fluents(Model):
         """Forward pass only for the encoding part."""
 
         predictions = [
-            self.local_features[region].predict(inputs)
+            self.encodings[region].predict(inputs)
             for region in self._region_names]
         predictions = tf.concat(predictions, axis=1)
 
@@ -979,7 +988,7 @@ class Fluents(Model):
         # Collect images from regions
         all_imgs = {}
         for region in self._region_names:
-            imgs = self.local_features[region].images(outputs)
+            imgs = self.encodings[region].images(outputs)
             imgs = {
                 region + "/" + name: img for name, img in imgs.items()}
             all_imgs.update(imgs)
@@ -1000,7 +1009,7 @@ class Fluents(Model):
         # Collect histograms from regions
         all_hists = {}
         for region in self._region_names:
-            hists = self.local_features[region].histograms(outputs)
+            hists = self.encodings[region].histograms(outputs)
             hists = {
                 region + "/" + name: hist for name, hist in hists.items()}
             all_hists.update(hists)
@@ -1120,3 +1129,29 @@ class GeneticModel(Model):
         }
 
         return tensors
+
+
+# TODO: here as a reference for the docstring
+#class BooleanFunctionsGA(GeneticAlgorithm):
+#    """Genetic algorithm for a set of Boolean functions.
+#
+#    This class learns a set of boolean functions. See BooleanRulesGA about
+#    the representation of each of those. The fitness of the individual can
+#    be computed here, because a predicted value for all symbols is available.
+#    We can now compare these values against the temporal constraint.
+#    See the temporal module for infos about temporal constraints.
+#    """
+#
+#    def __init__(self, constraints, **kwargs):
+#        """Initialize.
+#
+#        :param 
+#        :param constraints: temporal.TemporalConstraints instance.
+#            This may be none if this model is never trained.
+#        :param kwargs: GeneticAlgorithm params.
+#        """
+#
+#        # Store
+#        self._constraint = constraints
+#
+#
