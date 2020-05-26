@@ -402,7 +402,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         """Initialize.
 
         :param groups_spec: Specification of groups. See class' docstring.
-        :param n_inputs: Lenght of the input vector for each group.
+        :param n_inputs: Lenght of each input vector (all the same).
         :param n_individuals: Population size.
         :param mutation_p: Probability of a random mutation.
         """
@@ -410,10 +410,50 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         # Store
         self._groups_spec = groups_spec
         self._n_inputs = n_inputs
+        self._function_code_len = self._n_inputs + 1
+        self._functions_list = [
+            f for group in self._groups_spec for f in group["functions"]]
 
         # Super
         GeneticAlgorithm.__init__(
-            n_individuals=n_individuals, mutation_p=mutation_p)
+            self, n_individuals=n_individuals, mutation_p=mutation_p)
+
+    def initial_population(self):
+        """Generate the initial population."""
+
+        # Generate for each function
+        populations = []
+        for function in self._functions_list:
+            populations.append(BooleanRulesGA.initial_population(self))
+
+        # Combine
+        population = tf.concat(populations, axis=1)
+
+        return population
+
+    def sample_symbols(self, n, positions):
+        """Sample random symbols."""
+
+        # All functions are equal: just sample for the first function
+        positions = tf.math.floormod(positions, self._function_code_len)
+        sampled = BooleanRulesGA.sample_symbols(self, n, positions)
+
+        return sampled
+
+    def compute_fitness(self, population):
+        """Compute the fitness function.
+
+        See this class' docstring and the temporal module.
+        """
+
+        # TODO
+
+        return tf.ones([self.n_individuals], dtype=tf.float32)
+
+    def have_solution(self):
+        """Cannot tell because it's unsupervised."""
+
+        return -1
 
 
 class QueensGA(GeneticAlgorithm):
