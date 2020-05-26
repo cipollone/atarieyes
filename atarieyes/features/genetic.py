@@ -396,12 +396,27 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
             {"name": "group2", "functions": ["fn3_name"]},
 
     The order of these groups and of "functions" is relevant.
+    There should be no duplicate functions, of course.
+
+    To see more about temporal specifications, look at the temporal module.
+    Fitness function needs to be evaluated on a temporal trace. See the
+    compute_inputs parameter.
     """
 
-    def __init__(self, groups_spec, n_inputs, n_individuals, mutation_p):
+    def __init__(
+        self, groups_spec, compute_inputs, constraints, n_inputs,
+        n_individuals, mutation_p,
+    ):
         """Initialize.
 
         :param groups_spec: Specification of groups. See class' docstring.
+        :param compute_inputs: A callable which returns a sequence
+            of input tensors and a boolean flag. Each input tensor must be of
+            lenght n_inputs. The flag is True whenever a trace ends (the last
+            input is discarded).
+        :param constraints: a TemporalConstraints instance.  All fluents of
+            this constraint must be computed by boolean functions.
+            This may be None, if this layer is never trained.
         :param n_inputs: Lenght of each input vector (all the same).
         :param n_individuals: Population size.
         :param mutation_p: Probability of a random mutation.
@@ -409,10 +424,24 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
         # Store
         self._groups_spec = groups_spec
+        self._compute_inputs = compute_inputs
+        self._constraints = constraints
         self._n_inputs = n_inputs
         self._function_code_len = self._n_inputs + 1
         self._functions_list = [
             f for group in self._groups_spec for f in group["functions"]]
+        self._functions_groups = [
+            group_i for group_i in range(len(self._groups_spec))
+            for f in group["functions"]]
+
+        # Check
+        if self._constraints is not None:
+            all_predicted = all((
+                f in self._functions_list for f in self._constraints.fluents))
+            if not all_predicted:
+                raise ValueError(
+                    "Not all constrained fluents are predicted by boolean "
+                    "functions")
 
         # Super
         GeneticAlgorithm.__init__(
@@ -446,9 +475,48 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         See this class' docstring and the temporal module.
         """
 
-        # TODO
+        # TODO: this is a draft. Test it
 
-        return tf.ones([self.n_individuals], dtype=tf.float32)
+        # Retrieve / compute the input vectors
+        inputs, trace_ended = self._compute_inputs()
+
+        # Check
+        assert len(inputs) == self._groups_spec, (
+            "There must be one input vector for each region")
+
+        # Run an episode: observe the entire trace
+        while not trace_ended:
+            
+            # Predict with each function
+            functions_populations = tf.split(
+                population, [self._function_code_len], axis=1)
+            predictions = [
+                BooleanRulesGA._predict_with_rules(
+                    self,
+                    population=functions_populations[i],
+                    inputs=inputs[self._functions_groups[i]],
+                )
+                for i in range(len(self._functions_list))
+            ]
+
+            # Combine
+            predictions = tf.concat(predictions, axis=0)
+            self._constraints.observe(predictions)
+
+        # Compute metrics
+        consistency, sensitivity = self._constraints.compute()
+
+        # Combine into fitness
+        scale = 10
+        fitness = (consistency + sensitivity) / 2 * scale
+
+        # Check
+        assert fitness.shape == [self.n_individuals]
+
+        return fitness
+
+    # TODO: implement _predict_all() and predict()
+    #  Test them, use them in compute_fitness
 
     def have_solution(self):
         """Cannot tell because it's unsupervised."""
