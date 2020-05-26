@@ -806,6 +806,8 @@ class LocalFeatures(Model):
         return self.dbn.histograms(outputs)
 
 
+# TODO: Now working on GeneticModel for all boolean functions.
+#   Rewrite all this when done
 class Fluents(Model):
     """Model for binary local features.
 
@@ -823,8 +825,6 @@ class Fluents(Model):
     Also, the sender should not skip frames, because the exact sequence in each
     episode is important.
     """
-    # TODO: docstring!
-    # TODO: check class
 
     def __init__(
         self, env_name, dbn_spec, ga_spec, training_layer,
@@ -901,7 +901,6 @@ class Fluents(Model):
         ) if self._training_last else None
 
         # Last "layer" is a Genetic Algorithm
-        # TODO: use a model that already groups the boolean functions
         self._encoding_size = self._dbn_spec[-1]["n_hidden"]
         self.last_layer = GeneticModel(
             genetic.BooleanRulesGA(
@@ -1129,29 +1128,3 @@ class GeneticModel(Model):
         }
 
         return tensors
-
-
-# TODO: here as a reference for the docstring
-#class BooleanFunctionsGA(GeneticAlgorithm):
-#    """Genetic algorithm for a set of Boolean functions.
-#
-#    This class learns a set of boolean functions. See BooleanRulesGA about
-#    the representation of each of those. The fitness of the individual can
-#    be computed here, because a predicted value for all symbols is available.
-#    We can now compare these values against the temporal constraint.
-#    See the temporal module for infos about temporal constraints.
-#    """
-#
-#    def __init__(self, constraints, **kwargs):
-#        """Initialize.
-#
-#        :param 
-#        :param constraints: temporal.TemporalConstraints instance.
-#            This may be none if this model is never trained.
-#        :param kwargs: GeneticAlgorithm params.
-#        """
-#
-#        # Store
-#        self._constraint = constraints
-#
-#

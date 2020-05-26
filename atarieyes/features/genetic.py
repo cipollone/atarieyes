@@ -377,6 +377,45 @@ class BooleanRulesGA(GeneticAlgorithm):
         return prediction
 
 
+class BooleanFunctionsArrayGA(GeneticAlgorithm):
+    """Genetic algorithm for a sequence of boolean functions.
+
+    This class learns a set of boolean functions at the same time.
+    Sometimes it's impossibile to valuate one function on its own.
+    Here, each individual is a combination of all boolean functions to be
+    learnt. The fitness function valuate the goodness of each combination
+    is computed for this combination.
+
+    This class assumes that the boolean functions are organized in groups.
+    All function within a group share the same inputs. The parameter
+    `groups_spec` is a list of dicts that specifies this organization. It
+    also contains the parameters for each function in each group. For example:
+
+        [
+            {"name": "group1", "functions": ["fn1_name", "fn2_name"]},
+            {"name": "group2", "functions": ["fn3_name"]},
+
+    The order of these groups and of "functions" is relevant.
+    """
+
+    def __init__(self, groups_spec, n_inputs, n_individuals, mutation_p):
+        """Initialize.
+
+        :param groups_spec: Specification of groups. See class' docstring.
+        :param n_inputs: Lenght of the input vector for each group.
+        :param n_individuals: Population size.
+        :param mutation_p: Probability of a random mutation.
+        """
+
+        # Store
+        self._groups_spec = groups_spec
+        self._n_inputs = n_inputs
+
+        # Super
+        GeneticAlgorithm.__init__(
+            n_individuals=n_individuals, mutation_p=mutation_p)
+
+
 class QueensGA(GeneticAlgorithm):
     """N-queens problem.
 
