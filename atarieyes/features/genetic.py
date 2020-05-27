@@ -24,7 +24,7 @@ class GeneticAlgorithm(ABC2):
 
     _n_instances = 0
 
-    def __init__(self, n_individuals, mutation_p):
+    def __init__(self, n_individuals, mutation_p, trainable=True):
         """Initialize.
 
         Subclasses must call this after their initializations.
@@ -32,6 +32,9 @@ class GeneticAlgorithm(ABC2):
         :param n_individuals: population size.
         :param mutation_p: probability of random mutation for each symbol
             (should be rather small).
+        :param trainable: this flags do not affect variables directly.
+            If this is false, the initial fitness is not computed.
+            (this operation may require its own wasted resourses)
         """
 
         # Store
@@ -40,12 +43,17 @@ class GeneticAlgorithm(ABC2):
 
         assert n_individuals % 2 == 0, "Population must be of even size"
 
-        # Initialize
+        # Initialize population
         self.population = tf.Variable(
             self.initial_population(), trainable=False, name="Population_var")
+
+        # Initialize fitness
+        initial_fitness = (
+            self.compute_fitness(self.population) if trainable
+            else tf.ones([self.n_individuals], dtype=tf.float32)  # Any
+        )
         self.fitness = tf.Variable(
-            self.compute_fitness(self.population), trainable=False,
-            name="Fitness_var")
+            initial_fitness, trainable=False, name="Fitness_var")
 
         assert (
             self.population.shape.ndims == 3 and
@@ -292,7 +300,7 @@ class BooleanRulesGA(GeneticAlgorithm):
     @staticmethod
     def sample_symbols(n, positions):
         """Sample random symbols.
-        
+
         A static method overrides just like a bound one.
         Also it can be safely used from other classed.
         """
@@ -419,8 +427,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
     """
 
     def __init__(
-        self, groups_spec, compute_inputs, constraints, n_inputs,
-        n_individuals, mutation_p,
+        self, groups_spec, compute_inputs, constraints, n_inputs, **kwargs,
     ):
         """Initialize.
 
@@ -433,8 +440,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
             this constraint must be computed by boolean functions.
             This may be None, if this layer is never trained.
         :param n_inputs: Lenght of each input vector (all the same).
-        :param n_individuals: Population size.
-        :param mutation_p: Probability of a random mutation.
+        :param kwargs: GeneticAlgorithm params.
         """
 
         # Store
@@ -460,8 +466,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
                     "functions")
 
         # Super
-        GeneticAlgorithm.__init__(
-            self, n_individuals=n_individuals, mutation_p=mutation_p)
+        GeneticAlgorithm.__init__(self, **kwargs)
 
     def initial_population(self):
         """Generate the initial population."""

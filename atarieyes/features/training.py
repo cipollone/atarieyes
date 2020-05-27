@@ -260,7 +260,7 @@ class CheckpointSaver:
         """
 
         # Restore
-        self.checkpoint.restore(path)
+        self.checkpoint.restore(path).expect_partial()
         print("> Loaded:", path)
 
         # Read counters

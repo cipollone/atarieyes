@@ -217,11 +217,13 @@ class BinaryRBM(Model):
         )
 
         # Register the variables
+        vars_list = ("_W", "_bv", "_bh", "_h_distribution", "_saved_v")
+        if not trainable:
+            vars_list = vars_list[0:3]
+
         model = tf.Module(name="BinaryRBM")
-        model.vars = [                           # Fix an order
-            getattr(self.layers, v) for v in
-            ("_W", "_bv", "_bh", "_h_distribution", "_saved_v")]
-        assert len(model.variables) == len(self.layers.variables)
+        model.vars = [getattr(self.layers, v) for v in vars_list]
+        assert len(model.variables) == len(vars_list)
         assert len(model.trainable_variables) == len(
             self.layers.trainable_variables)
 
@@ -710,8 +712,8 @@ class LocalFeatures(Model):
         :param region: name of the selected region.
         :param dbn_spec: specification of a `DeepBeliefNetwork`.
             This is the same argument as `layers_spec` in `DeepBeliefNetwork`.
-            `n_visible` parameters are not required, because they can be
-            inferred.
+            `n_visible` parameters are not required, because they will be
+            computed.
         :param training_layer: index of the layer to train. Can be None.
         :param resize_pixels: the input region is resized to have less than
             this number of pixels.
@@ -806,24 +808,26 @@ class LocalFeatures(Model):
         return self.dbn.histograms(outputs)
 
 
-# TODO: Now working on GeneticModel for all boolean functions.
-#   Rewrite all this when done
+# TODO: test new training
+# TODO: test resume training
 class Fluents(Model):
     """Model for binary local features.
 
-    This class is the outer Model: it represents all binary features (aka
-    fluents) we define in each Atari game. Each environment has all fluents
-    defined in its json file; they are grouped in regions.
+    This class is the outer Model: it represents and leans all binary features
+    (aka fluents) that we define in each Atari game. These fluents are defined
+    in the json file associated to the environment. Fluents are also grouped
+    in regions.
 
-    First all regions are encoded through a set of LocalFeatures.
-    Then, last layer extracts from 
-    The first part is composed of a set of LocalFeatures, one for each region.
-    Then, last layer evaluates all fluents.
+    For each region, we define an encoder composed of a DBN. I call the
+    outputs of these encoders "local features". Then, each set of local
+    features is used to compute the fluents.
 
-    Since the last layer is traned with the temporal specification of the
-    fluents to extract, when training the last layer, batch size must be 1.
-    Also, the sender should not skip frames, because the exact sequence in each
-    episode is important.
+    Last transformation is carried on by a different model. It learns
+    the optimal boolean function of the local features whose output
+    is consistent with a temporal specification. See the temporal module for
+    info about temporal specifications. This means that when we train
+    last model, the sender should not skip any frame and all batch sizes must
+    be one.
     """
 
     def __init__(
@@ -850,7 +854,7 @@ class Fluents(Model):
         self._training_layer = training_layer
         self._training_region = training_region
         self._training_last = (
-            training_layer == -1 or training_layer >= len(dbn_spec))
+            training_layer == -1 or training_layer >= len(self._dbn_spec))
         self._frame_shape = gym.make(env_name).observation_space.shape
 
         # Read all regions
@@ -896,42 +900,49 @@ class Fluents(Model):
         self._constraints = temporal.TemporalConstraints(
             env_name=self._env_name,
             fluents=self.fluents,
-            n_functions=ga_spec["n_individuals"],
+            n_functions=self._ga_spec["n_individuals"],
             logdir=logdir,
         ) if self._training_last else None
 
-        # Last "layer" is a Genetic Algorithm
-        self._encoding_size = self._dbn_spec[-1]["n_hidden"]
-        self.last_layer = GeneticModel(
-            genetic.BooleanRulesGA(
-                n_inputs=self._encoding_size,
+        # Last model is a Genetic Algorithm
+        groups_spec = [{
+                "name": region,
+                "functions": [f for f in regions_data[region]["fluents"]]
+            } for region in self._region_names
+        ]
+        self.output_model = GeneticModel(
+            genetic.BooleanFunctionsArrayGA(
+                groups_spec=groups_spec,
+                compute_inputs=None,  # TODO
                 constraints=self._constraints,
-                n_individuals=self._ga_spec["n_individuals"],
-                mutation_p=self._ga_spec["mutation_p"],
+                n_inputs=self._dbn_spec[-1]["n_hidden"],
+                trainable=self._training_last,
+                **self._ga_spec,
             )
         )
 
         # Register the variables
         model = tf.Module(name="Fluents")
         for region in self._region_names:
-            namespace = "encoding_" + region
+            namespace = "region_" + region
             setattr(model, namespace, self.encodings[region].model)
-        model.last_layer = self.last_layer.model
+        model.output_model = self.output_model.model
 
         assert len(model.variables) == (sum(
             [len(inner.model.variables)
                 for inner in self.encodings.values()]) +
-            len(self.last_layer.model.variables))
+            len(self.output_model.model.variables))
         assert len(model.trainable_variables) == (sum(
             [len(inner.model.trainable_variables)
                 for inner in self.encodings.values()]) +
-            len(self.last_layer.model.trainable_variables))
+            len(self.output_model.model.trainable_variables))
 
         # Save
         self.model = model
         self.computed_gradient = not self._training_last
         self.train_step = (
-            self.last_layer.train_step if self._training_last else None)
+            self.output_model.train_step if self._training_last else None)
+    # TODO: review class below
 
     def compute_all(self, inputs):
         """Compute all tensors."""
