@@ -151,6 +151,10 @@ class GeneticAlgorithm(ABC2):
         population, fitness = inputs
         assert fitness.shape == [self.n_individuals]
 
+        # Don't, without proper fitness values
+        if tf.math.reduce_all(fitness == 0.0):
+            return population
+
         # Sample a new generation
         logits = tf.math.log(fitness)
         selection = tf.random.categorical([logits], self.n_individuals)
@@ -423,8 +427,8 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         :param groups_spec: Specification of groups. See class' docstring.
         :param compute_inputs: A callable which returns a sequence
             of input tensors and a boolean flag. Each input tensor must be of
-            lenght n_inputs. The flag is True whenever a trace ends (the last
-            input is discarded).
+            lenght n_inputs. The flag is True whenever a trace ends
+            (last input is discarded).
         :param constraints: a TemporalConstraints instance.  All fluents of
             this constraint must be computed by boolean functions.
             This may be None, if this layer is never trained.
@@ -487,35 +491,24 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         See this class' docstring and the temporal module.
         """
 
-        # TODO: this is a draft. Double check. also use predict methods
-        return tf.ones([self.n_individuals], dtype=tf.float32)
-
         # Retrieve / compute the input vectors
         inputs, trace_ended = self._compute_inputs()
 
         # Check
-        assert len(inputs) == self._groups_spec, (
+        assert len(inputs) == len(self._groups_spec), (
             "There must be one input vector for each region")
 
         # Run an episode: observe the entire trace
         while not trace_ended:
 
-            # Predict with each function
-            functions_populations = tf.split(
-                population, [self._function_code_len], axis=1)
-            predictions = [
-                BooleanRulesGA._predict_with_rules(
-                    population=functions_populations[i],
-                    inputs=inputs[self._functions_groups[i]],
-                )
-                for i in range(self._n_functions)
-            ]
+            # Predict all functions
+            predictions = self._predict_all(population, inputs)
 
-            # Combine
-            predictions = tf.concat(predictions, axis=0)
+            # Update
             self._constraints.observe(predictions)
 
-            # TODO: compute next!
+            # Compute next
+            inputs, trace_ended = self._compute_inputs()
 
         # Compute metrics
         consistency, sensitivity = self._constraints.compute()
@@ -527,7 +520,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         # Check
         assert fitness.shape == [self.n_individuals]
 
-        return fitness
+        return tf.cast(fitness, dtype=tf.float32)
 
     def _predict_all(self, population, inputs):
         """Make a prediction for all functions and all individuals.
