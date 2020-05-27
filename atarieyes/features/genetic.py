@@ -278,14 +278,20 @@ class BooleanRulesGA(GeneticAlgorithm):
         total_samples = self.n_individuals * (self._n_inputs + 1)
         positions = tf.tile(tf.range(self._n_inputs + 1), [self.n_individuals])
 
-        sampled = self.sample_symbols(total_samples, positions=positions)
+        sampled = BooleanRulesGA.sample_symbols(
+            total_samples, positions=positions)
         population = tf.reshape(
             sampled, (self.n_individuals, -1, tf.shape(sampled)[-1]))
 
         return population
 
-    def sample_symbols(self, n, positions):
-        """Sample random symbols."""
+    @staticmethod
+    def sample_symbols(n, positions):
+        """Sample random symbols.
+        
+        A static method overrides just like a bound one.
+        Also it can be safely used from other classed.
+        """
 
         # Sampling
         rule_type_samples = tf.random.uniform((n, 1), 0, 2, dtype=tf.int32)
@@ -312,12 +318,16 @@ class BooleanRulesGA(GeneticAlgorithm):
 
         return -1
 
-    def _predict_with_rules(self, population, inputs):
+    @staticmethod
+    def _predict_with_rules(population, inputs):
         """Make a batch of predictions with the current population.
 
         From an input boolean vector, compute a batch of boolean
         output scalars using the boolean rules in population.
         See this class' docstring for help on population.
+
+        A static method overrides just like a bound one.
+        Also it can be safely used from other classed.
 
         :param population: a batch of individuals
         :param inputs: a boolean vector (0s and 1s) of integer type.
@@ -326,14 +336,15 @@ class BooleanRulesGA(GeneticAlgorithm):
         """
 
         # Prepare shapes
-        population = tf.reshape(population, (-1, self.n_symbols))
+        assert population.shape[2] == 1
+        population = population[:, :, 0]
         rule_types = population[:, 0]
         constraints = population[:, 1:]
         inputs = tf.expand_dims(inputs, 0)     # Broadcast for all rules
 
         # Check
         inputs = tf.cast(inputs, tf.int8)
-        assert inputs.shape == [1, self._n_inputs]
+        assert inputs.shape == [1, population.shape[1] - 1]
 
         # Which constraints are satisfacted
         equals = (constraints == inputs)
@@ -432,7 +443,8 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
             f for group in self._groups_spec for f in group["functions"]]
         self._functions_groups = [
             group_i for group_i in range(len(self._groups_spec))
-            for f in group["functions"]]
+            for f in self._groups_spec[group_i]["functions"]]
+        self._n_functions = len(self._functions_list)
 
         # Check
         if self._constraints is not None:
@@ -465,7 +477,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
         # All functions are equal: just sample for the first function
         positions = tf.math.floormod(positions, self._function_code_len)
-        sampled = BooleanRulesGA.sample_symbols(self, n, positions)
+        sampled = BooleanRulesGA.sample_symbols(n, positions)
 
         return sampled
 
@@ -475,7 +487,8 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         See this class' docstring and the temporal module.
         """
 
-        # TODO: this is a draft. Test it
+        # TODO: this is a draft. Double check. also use predict methods
+        return tf.ones([self.n_individuals], dtype=tf.float32)
 
         # Retrieve / compute the input vectors
         inputs, trace_ended = self._compute_inputs()
@@ -486,22 +499,23 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
         # Run an episode: observe the entire trace
         while not trace_ended:
-            
+
             # Predict with each function
             functions_populations = tf.split(
                 population, [self._function_code_len], axis=1)
             predictions = [
                 BooleanRulesGA._predict_with_rules(
-                    self,
                     population=functions_populations[i],
                     inputs=inputs[self._functions_groups[i]],
                 )
-                for i in range(len(self._functions_list))
+                for i in range(self._n_functions)
             ]
 
             # Combine
             predictions = tf.concat(predictions, axis=0)
             self._constraints.observe(predictions)
+
+            # TODO: compute next!
 
         # Compute metrics
         consistency, sensitivity = self._constraints.compute()
@@ -515,8 +529,69 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
         return fitness
 
-    # TODO: implement _predict_all() and predict()
-    #  Test them, use them in compute_fitness
+    def _predict_all(self, population, inputs):
+        """Make a prediction for all functions and all individuals.
+
+        This function predicts a value for all boolean functions in the array
+        and for all individuals in the population.
+
+        :param population: a population of functions array.
+        :param inputs: a list of input tensors. See the class'
+            compute_inputs() argument.
+        :return: a batch of predictions of shape (n_individuals, n_functions).
+        """
+
+        # Split for each function
+        functions_populations = tf.split(population, self._n_functions, axis=1)
+
+        # Predict all
+        predictions = [
+            BooleanRulesGA._predict_with_rules(
+                population=functions_populations[i],
+                inputs=inputs[self._functions_groups[i]],
+            )
+            for i in range(self._n_functions)
+        ]
+        predictions = tf.stack(predictions, axis=1)
+
+        # Check
+        assert predictions.shape == (
+            tf.shape(population)[0], self._n_functions)
+
+        return predictions
+
+    def predict(self, inputs):
+        """Make a prediction with the fittest individual.
+
+        Computes a batch of predictions with the currently highest fitness
+        value.
+
+        :param inputs: a batch of input boolean vectors. An input simular
+            to those of _predict_all. Hoevery each vector is a batch.
+        :return: a batch of predictions (one for each vector)
+        """
+
+        # Best individual
+        fittest = self.population[tf.math.argmax(self.fitness)]
+        population_of1 = tf.expand_dims(fittest, 0)
+
+        # Predict for all inputs
+        batch_size = tf.shape(inputs[0])[0]
+        batch_population = tf.broadcast_to(
+            tf.expand_dims(population_of1, 0),
+            tf.concat(([batch_size], tf.shape(population_of1)), axis=0)
+        )
+        prediction = tf.map_fn(
+            lambda elems: self._predict_all(elems[0], elems[1]),
+            elems=[batch_population, inputs],
+            dtype=tf.int8,
+        )
+
+        # Strip dimension of 1 (individual)
+        prediction = prediction[:, 0, :]
+        assert prediction.shape == (batch_size, self._n_functions)
+
+        return prediction
 
     def have_solution(self):
         """Cannot tell because it's unsupervised."""
