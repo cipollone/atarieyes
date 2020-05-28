@@ -1003,7 +1003,6 @@ class Fluents(Model):
 
         return encoded, trace_ended
 
-    # TODO: review class below
     def compute_all(self, inputs):
         """Compute all tensors."""
 
@@ -1012,13 +1011,13 @@ class Fluents(Model):
             raise ValueError(
                 "When training the last layer, batch size must be 1")
 
-        # The first is the output of a prediction
-        encoding = self._encoding_predict(inputs)
-        predictions = self.last_layer.ga.predict(encoding)
+        # The first output is a prediction
+        encodings = self._encoding_predict(inputs)
+        predictions = self.output_model.ga.predict(encodings)
 
         # Then, training data follow
         if self._training_last:
-            ret = self.last_layer.compute_all(encoding)
+            ret = self.output_model.compute_all(encodings)
         else:
             training_model = self.encodings[self._training_region]
             ret = training_model.compute_all(inputs)
@@ -1034,8 +1033,8 @@ class Fluents(Model):
         :return: batch of values for all fluents.
         """
 
-        encoding = self._encoding_predict(inputs)
-        predictions = self.last_layer.ga.predict(encoding)
+        encodings = self._encoding_predict(inputs)
+        predictions = self.output_model.ga.predict(encodings)
 
         return predictions
 
@@ -1059,41 +1058,51 @@ class Fluents(Model):
         # The first comes from this model and it's not an image
         outputs = outputs[1:]
 
-        # Collect images from regions
-        all_imgs = {}
-        for region in self._region_names:
-            imgs = self.encodings[region].images(outputs)
+        # Collect images from training model
+        if not self._training_last:
+
+            # From regions
+            imgs = self.encodings[self._training_region].images(outputs)
             imgs = {
-                region + "/" + name: img for name, img in imgs.items()}
-            all_imgs.update(imgs)
+                self._training_region + "/" + name: img
+                for name, img in imgs.items()}
+            out_imgs.update(imgs)
 
-        # Collect images from last layer
-        imgs = self.last_layer.images(outputs)
-        imgs = {"last_layer/" + name: img for name, img in imgs.items()}
-        all_imgs.update(imgs)
+        else:
+            # From output model
+            imgs = self.output_model.images(outputs)
+            imgs = {"output_model/" + name: img for name, img in imgs.items()}
 
-        return all_imgs
+        return imgs
 
     def histograms(self, outputs):
         """Tensors to visualize."""
 
-        # The first comes from this model and it's a duplicate
+        out_hists = {}
+
+        # The first comes from this model
+        out_hists["fluents/prediction"] = outputs[0]
         outputs = outputs[1:]
 
-        # Collect histograms from regions
-        all_hists = {}
-        for region in self._region_names:
-            hists = self.encodings[region].histograms(outputs)
+        # Collect histograms from training model
+        if not self._training_last:
+
+            # From regions
+            hists = self.encodings[self._training_region].histograms(outputs)
             hists = {
-                region + "/" + name: hist for name, hist in hists.items()}
-            all_hists.update(hists)
+                self._training_region + "/" + name: hist
+                for name, hist in hists.items()}
+            out_hists.update(hists)
 
-        # Collect histograms from last layer
-        hists = self.last_layer.histograms(outputs)
-        hists = {"last_layer/" + name: hist for name, hist in hists.items()}
-        all_hists.update(hists)
+        else:
+            # From output model
+            hists = self.output_model.histograms(outputs)
+            hists = {
+                "output_model/" + name: hist
+                for name, hist in hists.items()}
+            out_hists.update(hists)
 
-        return all_hists
+        return out_hists
 
 
 class GeneticModel(Model):

@@ -495,6 +495,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
         See this class' docstring and the temporal module.
         """
+        # TODO: Should I use more than one episode to evaluate the fitness?
 
         # Retrieve / compute the input vectors
         inputs, trace_ended = self._compute_inputs()
