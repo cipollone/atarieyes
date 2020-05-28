@@ -927,7 +927,7 @@ class Fluents(Model):
         self.output_model = GeneticModel(
             genetic.BooleanFunctionsArrayGA(
                 groups_spec=groups_spec,
-                compute_inputs=None,  # TODO
+                compute_inputs=self._compute_encoding_fn,
                 constraints=self._constraints,
                 n_inputs=self._dbn_spec[-1]["n_hidden"],
                 trainable=self._training_last,
@@ -983,14 +983,25 @@ class Fluents(Model):
             yield frame, flag
 
     def _compute_encoding_fn(self):
-        """Makes a new prediction of the encoding layer.
+        """Makes a new prediction for the encoding layer.
 
         BooleanFunctionsArrayGA requires a callable which returns
         its inputs vector. This function serves this purpose.
+
+        :return: a single inputs vector.
         """
 
-        # TODO
+        # Next batch of one frame
+        frame, trace_ended = next(self._frames_sequence_it)
+        inputs = tf.expand_dims(frame, 0)
 
+        # Encoded regions
+        encoded = self._encoding_predict(inputs)
+
+        # Strip batch dimension
+        encoded = [batch[0] for batch in encoded]
+
+        return encoded, trace_ended
 
     # TODO: review class below
     def compute_all(self, inputs):
@@ -1029,12 +1040,16 @@ class Fluents(Model):
         return predictions
 
     def _encoding_predict(self, inputs):
-        """Forward pass only for the encoding part."""
+        """Forward pass only for the encoding part.
+        
+        :param inputs: a batch of inputs (usually batch of frames).
+        :return: a sequence of batched encoding (one for each region)
+        """
 
         predictions = [
             self.encodings[region].predict(inputs)
-            for region in self._region_names]
-        predictions = tf.concat(predictions, axis=1)
+            for region in self._region_names
+        ]
 
         return predictions
 
