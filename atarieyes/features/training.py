@@ -415,14 +415,42 @@ def random_player(env_name, render=False):
     env.close()
 
 
-def agent_player(env_name, ip="localhost"):
-    """Returns frame from a trained agent.
+def agent_player(env_name, ip):
+    """Returns frames from a remote player.
 
     This requires a running instance of `atarieyes agent play`.
 
     :param env_name: name of an Atari Gym environment
     :param ip: machine where the agent is playing
     :return: a generator of frames
+    """
+
+    # Create the main generator
+    receiver_gen = atari_frames_generator(env_name, ip)
+
+    # Loop
+    while True:
+
+        # Receive
+        frame, termination = next(receiver_gen)
+
+        # Skip if repeated
+        assert termination in ("continue", "last", "repeated_last")
+        if termination == "repeated_last":
+            continue
+        
+        # Return
+        yield frame
+
+
+def atari_frames_generator(env_name, ip):
+    """Returns data from an AtariFramesReceiver.
+
+    This requires a running instance of `atarieyes agent play`.
+
+    :param env_name: name of an Atari Gym environment
+    :param ip: machine where the agent is playing
+    :return: See AtariFramesReceiver for the return type
     """
 
     print("> Waiting for a stream of frames from:", ip)
@@ -433,10 +461,7 @@ def agent_player(env_name, ip="localhost"):
     # Collect
     try:
         while True:
-            frame, termination = receiver.receive(wait=True)
-            if termination == "repeated_last":
-                continue
-            yield frame
+            yield receiver.receive(wait=True)
 
     except ConnectionAbortedError:
         raise StopIteration

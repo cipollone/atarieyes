@@ -808,8 +808,6 @@ class LocalFeatures(Model):
         return self.dbn.histograms(outputs)
 
 
-# TODO: test new training
-# TODO: test resume training
 class Fluents(Model):
     """Model for binary local features.
 
@@ -943,6 +941,10 @@ class Fluents(Model):
         self.train_step = (
             self.output_model.train_step if self._training_last else None)
     # TODO: review class below
+
+    # TODO: add a new argument for the agent_player (iterator of receiver)
+    # TODO: make dataset in init
+    # TODO: new function which consumes and encodes (without args)
 
     def compute_all(self, inputs):
         """Compute all tensors."""
