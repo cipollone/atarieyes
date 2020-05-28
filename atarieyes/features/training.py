@@ -356,15 +356,9 @@ def make_dataset(game_player, batch, frame_shape, shuffle_size):
     :return: Tensorflow Dataset.
     """
 
-    # Extract observations
-    def frame_iterate():
-        env_step = game_player()
-        while True:
-            yield next(env_step)
-
     # Dataset
     dataset = tf.data.Dataset.from_generator(
-        frame_iterate, output_types=tf.uint8, output_shapes=frame_shape)
+        game_player, output_types=tf.uint8, output_shapes=frame_shape)
 
     dataset = dataset.shuffle(shuffle_size)
     dataset = dataset.batch(batch)
@@ -438,7 +432,7 @@ def agent_player(env_name, ip):
         assert termination in ("continue", "last", "repeated_last")
         if termination == "repeated_last":
             continue
-        
+
         # Return
         yield frame
 

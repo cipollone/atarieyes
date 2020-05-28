@@ -830,7 +830,7 @@ class Fluents(Model):
 
     def __init__(
         self, env_name, dbn_spec, ga_spec, training_layer,
-        training_region=None, logdir=".",
+        training_region=None, receiver_gen=None, logdir=".",
     ):
         """Initialize.
 
@@ -842,6 +842,8 @@ class Fluents(Model):
         :param training_layer: index of the region layer to train.
         :param training_region: name of the region to train.
             This is required if training_layer < last (== len(dbn_spec)).
+        :param receiver_gen: a callable that returns a generator of data from
+            an AtariFramesReceiver. Required only if training the output layer.
         :param logdir: directory where to put logs.
         """
 
@@ -902,6 +904,20 @@ class Fluents(Model):
             logdir=logdir,
         ) if self._training_last else None
 
+        # Input pipeline for the last layer
+        if self._training_last:
+
+            # Create a dataset that returns the exact sequence of frames
+            dataset = tf.data.Dataset.from_generator(
+                lambda: Fluents._compute_inputs_gen(receiver_gen),
+                output_types=(tf.uint8, tf.bool),
+                output_shapes=(
+                    tf.TensorShape(self._frame_shape), tf.TensorShape([])),
+            )
+            dataset = dataset.prefetch(5)
+
+            self._frames_sequence_it = iter(dataset)
+
         # Last model is a Genetic Algorithm
         groups_spec = [{
                 "name": region,
@@ -940,12 +956,43 @@ class Fluents(Model):
         self.computed_gradient = not self._training_last
         self.train_step = (
             self.output_model.train_step if self._training_last else None)
+
+    @staticmethod
+    def _compute_inputs_gen(receiver_gen):
+        """Adapt the receiver output for BooleanFunctionsArrayGA.
+
+        :param receiver_gen: a callable that returns a generator of data from
+            an AtariFramesReceiver.
+        :return: a generator that returns a frame and a boolean flag.
+            True indicates that the episode ended and the frame can be
+            discarded.
+        """
+
+        # Create the generator
+        gen = receiver_gen()
+
+        while True:
+
+            # Receive
+            frame, termination = next(gen)
+
+            # Signal end of trace
+            assert termination in ("continue", "repeated_last")
+            flag = (termination == "repeated_last")
+
+            yield frame, flag
+
+    def _compute_encoding_fn(self):
+        """Makes a new prediction of the encoding layer.
+
+        BooleanFunctionsArrayGA requires a callable which returns
+        its inputs vector. This function serves this purpose.
+        """
+
+        # TODO
+
+
     # TODO: review class below
-
-    # TODO: add a new argument for the agent_player (iterator of receiver)
-    # TODO: make dataset in init
-    # TODO: new function which consumes and encodes (without args)
-
     def compute_all(self, inputs):
         """Compute all tensors."""
 
