@@ -148,7 +148,7 @@ class TemporalConstraints:
 
         # Check
         if self._timestep == 0:
-            consistency = tf.zeros(shape=[self._n_functions], dtype=tf.float64)
+            consistency = tf.zeros(shape=[self._n_functions], dtype=tf.float32)
             sensitivity = tf.zeros_like(consistency)
             return consistency, sensitivity
 
@@ -162,5 +162,9 @@ class TemporalConstraints:
 
         # Reset
         self._reset()
+
+        # Cast
+        consistency = tf.cast(consistency, dtype=tf.float32)
+        sensitivity = tf.cast(sensitivity, dtype=tf.float32)
 
         return consistency, sensitivity

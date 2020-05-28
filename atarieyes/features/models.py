@@ -1206,6 +1206,7 @@ class GeneticModel(Model):
         tensors = {
             "fitness": outputs[1],
             "population_pca": population_pca,
+            **self.ga.metrics,
         }
 
         return tensors

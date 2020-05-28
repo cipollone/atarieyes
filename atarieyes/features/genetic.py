@@ -9,7 +9,7 @@ import math
 import tensorflow as tf
 
 from atarieyes.layers import make_layer
-from atarieyes.tools import ABC2
+from atarieyes.tools import ABC2, AbstractAttribute
 
 
 class GeneticAlgorithm(ABC2):
@@ -23,6 +23,9 @@ class GeneticAlgorithm(ABC2):
     """
 
     _n_instances = 0
+
+    # A dict of metrics computed from last training step. {name: variable}
+    metrics = AbstractAttribute()
 
     def __init__(self, n_individuals, mutation_p, trainable=True):
         """Initialize.
@@ -280,6 +283,7 @@ class BooleanRulesGA(GeneticAlgorithm):
 
         # Store
         self._n_inputs = n_inputs
+        self.metrics = {}
 
         # Super
         GeneticAlgorithm.__init__(self, **kwargs)
@@ -465,6 +469,16 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
                     "Not all constrained fluents are predicted by boolean "
                     "functions")
 
+        # Metrics
+        self.metrics = {
+            "consistency": tf.Variable(
+                tf.zeros(shape=[kwargs["n_individuals"]], dtype=tf.float32),
+                trainable=False, name="Consistency_metric"),
+            "sensitivity": tf.Variable(
+                tf.zeros(shape=[kwargs["n_individuals"]], dtype=tf.float32),
+                trainable=False, name="Sensitivity_metric"),
+        }
+
         # Super
         GeneticAlgorithm.__init__(self, **kwargs)
 
@@ -526,7 +540,11 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         # Check
         assert fitness.shape == [self.n_individuals]
 
-        return tf.cast(fitness, dtype=tf.float32)
+        # Log
+        self.metrics["consistency"].assign(consistency)
+        self.metrics["sensitivity"].assign(sensitivity)
+
+        return fitness
 
     def _predict_all(self, population, inputs):
         """Make a prediction for all functions and all individuals.
@@ -616,6 +634,7 @@ class QueensGA(GeneticAlgorithm):
         self._size = size
         self._n_pairs = int(
             math.factorial(size) / (2 * math.factorial(size - 2)))
+        self.metrics = {}
 
         # Super
         GeneticAlgorithm.__init__(self, **kwargs)
