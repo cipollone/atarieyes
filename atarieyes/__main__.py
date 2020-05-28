@@ -23,8 +23,8 @@ def main():
         sparsity_target=0.2,
         shuffle=10000,
         network_size=[50, 20],
-        population_size=10,      # TODO: low just for debugging
-        mutation_p=0.01,
+        population_size=2000,
+        mutation_p=0.005,
     )
     agent_defaults = dict(
         memory_limit=1000000,

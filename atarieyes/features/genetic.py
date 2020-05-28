@@ -554,8 +554,10 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         predictions = tf.stack(predictions, axis=1)
 
         # Check
-        assert predictions.shape == (
-            tf.shape(population)[0], self._n_functions)
+        tf.debugging.assert_shapes([
+            (predictions, ("P", self._n_functions)),
+            (population, ("P", None, None)),
+        ])
 
         return predictions
 
@@ -588,7 +590,10 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
         # Strip dimension of 1 (individual)
         prediction = prediction[:, 0, :]
-        assert prediction.shape == (batch_size, self._n_functions)
+        tf.debugging.assert_shapes([
+            (prediction, ("B", self._n_functions)),
+            (inputs[0], ("B", None)),
+        ])
 
         return prediction
 

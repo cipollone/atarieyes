@@ -1040,7 +1040,7 @@ class Fluents(Model):
 
     def _encoding_predict(self, inputs):
         """Forward pass only for the encoding part.
-        
+
         :param inputs: a batch of inputs (usually batch of frames).
         :return: a sequence of batched encoding (one for each region)
         """
@@ -1055,18 +1055,15 @@ class Fluents(Model):
     def images(self, outputs):
         """Images to visualize."""
 
-        # The first comes from this model and it's not an image
-        outputs = outputs[1:]
-
         # Collect images from training model
         if not self._training_last:
 
             # From regions
+            outputs = outputs[1:]   # The first comes from this model
             imgs = self.encodings[self._training_region].images(outputs)
             imgs = {
                 self._training_region + "/" + name: img
                 for name, img in imgs.items()}
-            out_imgs.update(imgs)
 
         else:
             # From output model
@@ -1080,12 +1077,12 @@ class Fluents(Model):
 
         out_hists = {}
 
-        # The first comes from this model
-        out_hists["fluents/prediction"] = outputs[0]
-        outputs = outputs[1:]
-
         # Collect histograms from training model
         if not self._training_last:
+
+            # The first comes from this model
+            out_hists["fluents/prediction"] = outputs[0]
+            outputs = outputs[1:]
 
             # From regions
             hists = self.encodings[self._training_region].histograms(outputs)

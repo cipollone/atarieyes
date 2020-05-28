@@ -38,12 +38,6 @@ class Trainer:
         self.env = gym.make(args.env)
         self.frame_shape = self.env.observation_space.shape
 
-        # Dataset
-        dataset = make_dataset(
-            lambda: agent_player(args.env, args.stream),
-            args.batch_size, self.frame_shape, args.shuffle)
-        self.dataset_it = iter(dataset)
-
         # Model hyper-parameters
         encoding_spec = [dict(
                 n_hidden=units, batch_size=args.batch_size,
@@ -61,8 +55,16 @@ class Trainer:
             ga_spec=genetic_spec,
             training_layer=int(args.train_region_layer[1]),
             training_region=args.train_region_layer[0],
+            receiver_gen=lambda: atari_frames_generator(args.env, args.stream),
             logdir=log_path,
         )
+
+        # Define the dataset and initialize it (if not custom training loop)
+        dataset = make_dataset(
+            lambda: agent_player(args.env, args.stream),
+            args.batch_size, self.frame_shape, args.shuffle)
+        if not self.model.train_step:
+            self.dataset_it = iter(dataset)
 
         # Optimization
         if self.decay_rate:
