@@ -38,24 +38,33 @@ class Trainer:
         self.env = gym.make(args.env)
         self.frame_shape = self.env.observation_space.shape
 
-        # Dataset
-        dataset = make_dataset(
-            lambda: agent_player(args.env, args.stream),
-            args.batch_size, self.frame_shape, args.shuffle)
-        self.dataset_it = iter(dataset)
-
-        # Model
-        network_spec = [dict(
+        # Model hyper-parameters
+        encoding_spec = [dict(
                 n_hidden=units, batch_size=args.batch_size,
                 l2_const=args.l2_const, sparsity_const=args.sparsity_const,
                 sparsity_target=args.sparsity_target,
             ) for units in args.network_size
         ]
+        genetic_spec = dict(
+            n_individuals=args.population_size, mutation_p=args.mutation_p)
+
+        # Model
         self.model = models.Fluents(
-            env_name=args.env, dbn_spec=network_spec,
-            training_region=args.train_region_layer[0],
+            env_name=args.env,
+            dbn_spec=encoding_spec,
+            ga_spec=genetic_spec,
             training_layer=int(args.train_region_layer[1]),
+            training_region=args.train_region_layer[0],
+            receiver_gen=lambda: atari_frames_generator(args.env, args.stream),
+            logdir=log_path,
         )
+
+        # Define the dataset and initialize it (if not custom training loop)
+        dataset = make_dataset(
+            lambda: agent_player(args.env, args.stream),
+            args.batch_size, self.frame_shape, args.shuffle)
+        if not self.model.train_step:
+            self.dataset_it = iter(dataset)
 
         # Optimization
         if self.decay_rate:
@@ -253,7 +262,7 @@ class CheckpointSaver:
         """
 
         # Restore
-        self.checkpoint.restore(path)
+        self.checkpoint.restore(path).expect_partial()
         print("> Loaded:", path)
 
         # Read counters
@@ -349,15 +358,9 @@ def make_dataset(game_player, batch, frame_shape, shuffle_size):
     :return: Tensorflow Dataset.
     """
 
-    # Extract observations
-    def frame_iterate():
-        env_step = game_player()
-        while True:
-            yield next(env_step)
-
     # Dataset
     dataset = tf.data.Dataset.from_generator(
-        frame_iterate, output_types=tf.uint8, output_shapes=frame_shape)
+        game_player, output_types=tf.uint8, output_shapes=frame_shape)
 
     dataset = dataset.shuffle(shuffle_size)
     dataset = dataset.batch(batch)
@@ -408,14 +411,42 @@ def random_player(env_name, render=False):
     env.close()
 
 
-def agent_player(env_name, ip="localhost"):
-    """Returns frame from a trained agent.
+def agent_player(env_name, ip):
+    """Returns frames from a remote player.
 
     This requires a running instance of `atarieyes agent play`.
 
     :param env_name: name of an Atari Gym environment
     :param ip: machine where the agent is playing
     :return: a generator of frames
+    """
+
+    # Create the main generator
+    receiver_gen = atari_frames_generator(env_name, ip)
+
+    # Loop
+    while True:
+
+        # Receive
+        frame, termination = next(receiver_gen)
+
+        # Skip if repeated
+        assert termination in ("continue", "last", "repeated_last")
+        if termination == "repeated_last":
+            continue
+
+        # Return
+        yield frame
+
+
+def atari_frames_generator(env_name, ip):
+    """Returns data from an AtariFramesReceiver.
+
+    This requires a running instance of `atarieyes agent play`.
+
+    :param env_name: name of an Atari Gym environment
+    :param ip: machine where the agent is playing
+    :return: See AtariFramesReceiver for the return type
     """
 
     print("> Waiting for a stream of frames from:", ip)

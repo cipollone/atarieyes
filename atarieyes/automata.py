@@ -64,8 +64,8 @@ class TfSymbolicAutomaton:
         symbols = np.array(symbols, dtype=np.int32)
         to_states = np.array(to_states, dtype=np.int32)
 
-        assert np.all(from_states >= 0) and np.all(to_states >= 0), \
-            "Expected states with positive indices"
+        assert np.all(from_states >= 0) and np.all(to_states >= 0), (
+            "Expected states with positive indices")
         assert np.all(0 <= symbols) and np.all(symbols <= 1), "Logic error"
 
         # Use state_values as keys
