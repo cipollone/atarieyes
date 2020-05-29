@@ -1108,6 +1108,9 @@ class GeneticModel(Model):
     A GeneticAlgorithm is not a I/O Model. This class is only used to fit
     the algorithm into the same training loop, with merics.
     This model represents the training procedure, not the individuals.
+
+    NOTE: due to the large number of small tf ops, this model trains faster
+    on cpu.
     """
 
     def __init__(self, ga):

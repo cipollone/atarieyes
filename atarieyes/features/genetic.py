@@ -20,6 +20,9 @@ class GeneticAlgorithm(ABC2):
     after each training step.
     All subclasses should override with methods that actually work with
     tf.function (use tf.py_function, if necessary).
+
+    NOTE: due to the large number of small tf ops, genetic algorithms train
+    faster on cpu.
     """
 
     _n_instances = 0
@@ -538,7 +541,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         consistency, sensitivity = self._constraints.compute()
 
         # Combine into fitness
-        fitness = (consistency + sensitivity) / 2
+        fitness = consistency * sensitivity
         fmin, fmax = self._fitness_range
         fitness = fmin + (fmax - fmin) * fitness
 

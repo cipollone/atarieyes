@@ -23,9 +23,9 @@ def main():
         sparsity_target=0.2,
         shuffle=10000,
         network_size=[50, 20],
-        population_size=2000,
-        mutation_p=0.005,
-        fitness_range=[10, 20],
+        population_size=5000,
+        mutation_p=0.02,
+        fitness_range=[0, 10],
     )
     agent_defaults = dict(
         memory_limit=1000000,
