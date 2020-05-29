@@ -46,7 +46,10 @@ class Trainer:
             ) for units in args.network_size
         ]
         genetic_spec = dict(
-            n_individuals=args.population_size, mutation_p=args.mutation_p)
+            n_individuals=args.population_size,
+            mutation_p=args.mutation_p,
+            fitness_range=args.fitness_range,
+        )
 
         # Model
         self.model = models.Fluents(

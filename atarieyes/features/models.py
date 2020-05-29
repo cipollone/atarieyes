@@ -837,8 +837,8 @@ class Fluents(Model):
         :param env_name: a gym environment name.
         :param dbn_spec: see LocalFeatures `dbn_spec`;
             the same model specification is used for all regions.
-        :param ga_spec: genetic algorithm spec. A dict of arguments
-            for the GeneticAlgorithm class.
+        :param ga_spec: genetic algorithm specification. A dict of:
+            "n_individuals", "mutation_p", "fitness_range".
         :param training_layer: index of the region layer to train.
         :param training_region: name of the region to train.
             This is required if training_layer < last (== len(dbn_spec)).
@@ -1134,10 +1134,20 @@ class GeneticModel(Model):
     def compute_all(self, inputs):
         """Nothing to compute. Just show the training graph."""
 
+        # Compute
         population, fitness = self.ga.compute_train_step(
             self.ga.population, self.ga.fitness)
+
+        # Fitness scalars
         mean_fitness = tf.math.reduce_mean(fitness)
         max_fitness = tf.math.reduce_max(fitness)
+
+        # Other scalars
+        scalars = {}
+        for metric in self.ga.metrics:
+            value = self.ga.metrics[metric]
+            scalars[metric + "_max"] = tf.math.reduce_max(value)
+            scalars[metric + "_mean"] = tf.math.reduce_mean(value)
 
         # Ret
         ret = dict(
@@ -1146,6 +1156,7 @@ class GeneticModel(Model):
             metrics=dict(
                 mean_fitness=mean_fitness,
                 max_fitness=max_fitness,
+                **scalars,
             ),
             gradients=None,
         )

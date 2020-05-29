@@ -25,6 +25,7 @@ def main():
         network_size=[50, 20],
         population_size=2000,
         mutation_p=0.005,
+        fitness_range=[10, 20],
     )
     agent_defaults = dict(
         memory_limit=1000000,
@@ -237,6 +238,10 @@ def main():
         "--pop-size", type=int, metavar="SIZE", dest="population_size",
         default=features_defaults["population_size"],
         help="Number of individuals in the genetic algorithm.")
+    features_train.add_argument(
+        "--fitness", type=int, nargs=2, metavar=("MIN", "MAX"),
+        dest="fitness_range", default=features_defaults["fitness_range"],
+        help="Min max values of the fitness function.")
     features_train_resuming = features_train.add_mutually_exclusive_group()
     features_train_resuming.add_argument(
         "-c", "--continue", dest="cont", type=str, metavar="FILE",

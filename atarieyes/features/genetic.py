@@ -431,7 +431,8 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
     """
 
     def __init__(
-        self, groups_spec, compute_inputs, constraints, n_inputs, **kwargs,
+        self, groups_spec, compute_inputs, constraints, n_inputs,
+        fitness_range, **kwargs,
     ):
         """Initialize.
 
@@ -444,6 +445,8 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
             this constraint must be computed by boolean functions.
             This may be None, if this layer is never trained.
         :param n_inputs: Lenght of each input vector (all the same).
+        :param fitness_range: min, max values of the fitness score.
+            Must be positive.
         :param kwargs: GeneticAlgorithm params.
         """
 
@@ -452,6 +455,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         self._compute_inputs = compute_inputs
         self._constraints = constraints
         self._n_inputs = n_inputs
+        self._fitness_range = fitness_range
         self._function_code_len = self._n_inputs + 1
         self._functions_list = [
             f for group in self._groups_spec for f in group["functions"]]
@@ -534,8 +538,9 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         consistency, sensitivity = self._constraints.compute()
 
         # Combine into fitness
-        scale = 10
-        fitness = (consistency + sensitivity) / 2 * scale
+        fitness = (consistency + sensitivity) / 2
+        fmin, fmax = self._fitness_range
+        fitness = fmin + (fmax - fmin) * fitness
 
         # Check
         assert fitness.shape == [self.n_individuals]
