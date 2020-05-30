@@ -13,13 +13,15 @@ from atarieyes.tools import ABC2, AbstractAttribute
 
 
 class GeneticAlgorithm(ABC2):
-    """Top down structure of a Genetic Algorithm.
+    """Interface and training loop for all genetic algorithms.
 
-    Values and lists are actually Tf tensors.
     'population' and 'fitness' are two variables that store the current states
-    after each training step.
+    after each training step. 'best' contains the individual with the
+    highest fitness score.
+
     All subclasses should override with methods that actually work with
-    tf.function (use tf.py_function, if necessary).
+    tf.function (use tf.py_function, if necessary). Also, parameters described
+    as lists are actually tensors.
 
     NOTE: due to the large number of small tf ops, genetic algorithms train
     faster on cpu.
@@ -61,6 +63,11 @@ class GeneticAlgorithm(ABC2):
         self.fitness = tf.Variable(
             initial_fitness, trainable=False, name="Fitness_var")
 
+        # Best individual
+        self.best = tf.Variable(
+            self.population[0], trainable=False, name="BestIndividual_var")
+        self._update_best()
+
         assert (
             self.population.shape.ndims == 3 and
             self.population.shape[0] == n_individuals), (
@@ -82,6 +89,12 @@ class GeneticAlgorithm(ABC2):
 
         # Counter
         self._n_instances += 1
+
+    def _update_best(self):
+        """Updates the best individual according to fitness."""
+
+        fittest = self.population[tf.math.argmax(self.fitness)]
+        self.best.assign(fittest)
 
     @abstractmethod
     def initial_population(self):
@@ -263,6 +276,7 @@ class GeneticAlgorithm(ABC2):
         # Store
         self.population.assign(population)
         self.fitness.assign(fitness)
+        self._update_best()
 
 
 class BooleanRulesGA(GeneticAlgorithm):
@@ -389,8 +403,8 @@ class BooleanRulesGA(GeneticAlgorithm):
         """
 
         # Best individual
-        fittest = self.population[tf.math.argmax(self.fitness)]
-        population_of1 = tf.expand_dims(fittest, 0)
+        best = tf.identity(self.best, name="Fittest_individual")
+        population_of1 = tf.expand_dims(best, 0)
 
         # Predict for all inputs
         batch_size = tf.shape(inputs)[0]
@@ -599,8 +613,8 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         """
 
         # Best individual
-        fittest = self.population[tf.math.argmax(self.fitness)]
-        population_of1 = tf.expand_dims(fittest, 0)
+        best = tf.identity(self.best, name="Fittest_individual")
+        population_of1 = tf.expand_dims(best, 0)
 
         # Predict for all inputs
         batch_size = tf.shape(inputs[0])[0]

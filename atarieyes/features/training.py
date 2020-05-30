@@ -151,6 +151,7 @@ class Trainer:
         """Compute the metrics on one batch and save a log.
 
         When 'outputs' is not given, it runs the model to compute the metrics.
+        When metrics are not scalars, it prints their mean and max value.
 
         :param outputs: (optional) outputs returned by Model.compute_all.
         :return: the saved quantities (metrics and loss)
@@ -161,7 +162,7 @@ class Trainer:
             frames = next(self.dataset_it)
             outputs = self._model_compute_all(frames)
 
-        # Log scalars
+        # Collect all metrics
         metrics = {
             "metrics/" + name: value
             for name, value in outputs["metrics"].items()}
@@ -169,7 +170,19 @@ class Trainer:
             metrics["loss"] = outputs["loss"]
         metrics["learning_rate"] = self.learning_rate if not self.decay_rate \
             else self.learning_rate(self._step)
-        self.logger.save_scalars(self._step, metrics)
+
+        # Log scalars (convert to mean max if necessary)
+        scalars = {}
+        for name, value in metrics.items():
+            is_scalar = (
+                isinstance(value, int) or isinstance(value, float) or
+                value.ndim == 0)
+            if is_scalar:
+                scalars[name] = value
+            else:
+                scalars[name + "_mean"] = tf.math.reduce_mean(value)
+                scalars[name + "_max"] = tf.math.reduce_max(value)
+        self.logger.save_scalars(self._step, scalars)
 
         # Log images
         images = self.model.images(outputs["outputs"])
@@ -179,13 +192,13 @@ class Trainer:
         histograms = self.model.histograms(outputs["outputs"])
         self.logger.save_histogram(self._step, histograms)
 
-        # Transform tensors to scalars for nice logs
-        metrics = {
+        # Transform tensors to arrays for nice logs
+        scalars = {
             name: var.numpy() if isinstance(var, tf.Tensor) else var
-            for name, var in metrics.items()
+            for name, var in scalars.items()
         }
 
-        return metrics
+        return scalars
 
     @tf.function
     def _model_compute_all(self, inputs):
@@ -312,7 +325,7 @@ class TensorBoardLogger:
         """Visualize scalar metrics in TensorBoard.
 
         :param step: the step number
-        :param metrics: a dict of (name: value)
+        :param metrics: a dict of (name: value), where value is a scalar
         """
 
         # Save

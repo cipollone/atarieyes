@@ -1128,7 +1128,7 @@ class GeneticModel(Model):
 
         # Register the variables
         model = tf.Module(name="GeneticModel")
-        model.vars = [self.ga.population, self.ga.fitness]
+        model.vars = [self.ga.population, self.ga.fitness, self.ga.best]
 
         # Save
         self.model = model
@@ -1141,26 +1141,15 @@ class GeneticModel(Model):
         population, fitness = self.ga.compute_train_step(
             self.ga.population, self.ga.fitness)
 
-        # Fitness scalars
-        mean_fitness = tf.math.reduce_mean(fitness)
-        max_fitness = tf.math.reduce_max(fitness)
-
-        # Other scalars
-        scalars = {}
-        for metric in self.ga.metrics:
-            value = self.ga.metrics[metric]
-            scalars[metric + "_max"] = tf.math.reduce_max(value)
-            scalars[metric + "_mean"] = tf.math.reduce_mean(value)
+        # Collect metrics
+        metrics = dict(self.ga.metrics)
+        metrics["fitness"] = fitness
 
         # Ret
         ret = dict(
             outputs=[population, fitness],
             loss=None,
-            metrics=dict(
-                mean_fitness=mean_fitness,
-                max_fitness=max_fitness,
-                **scalars,
-            ),
+            metrics=metrics,
             gradients=None,
         )
         return ret
