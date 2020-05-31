@@ -2,6 +2,7 @@
 
 import os
 import json
+import itertools
 import gym
 import numpy as np
 import tensorflow as tf
@@ -48,7 +49,9 @@ class Trainer:
         genetic_spec = dict(
             n_individuals=args.population_size,
             mutation_p=args.mutation_p,
+            crossover_p=args.crossover_p,
             fitness_range=args.fitness_range,
+            n_episodes=args.fitness_episodes,
         )
 
         # Model
@@ -66,8 +69,10 @@ class Trainer:
         dataset = make_dataset(
             lambda: agent_player(args.env, args.stream),
             args.batch_size, self.frame_shape, args.shuffle)
-        if not self.model.train_step:
-            self.dataset_it = iter(dataset)
+        self.dataset_it = iter(dataset) if not self.model.train_step else \
+            itertools.repeat(
+                np.zeros((self.batch_size,) + self.frame_shape,
+                    dtype=np.uint8))
 
         # Optimization
         if self.decay_rate:

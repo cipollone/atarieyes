@@ -32,7 +32,7 @@ class GeneticAlgorithm(ABC2):
     # A dict of metrics computed from last training step. {name: variable}
     metrics = AbstractAttribute()
 
-    def __init__(self, n_individuals, mutation_p, trainable=True):
+    def __init__(self, n_individuals, mutation_p, crossover_p, trainable=True):
         """Initialize.
 
         Subclasses must call this after their initializations.
@@ -40,6 +40,8 @@ class GeneticAlgorithm(ABC2):
         :param n_individuals: population size.
         :param mutation_p: probability of random mutation for each symbol
             (should be rather small).
+        :param crossover_p: individual probability of crossovers between
+            parents.
         :param trainable: this flags do not affect variables directly.
             If this is false, the initial fitness is not computed.
             (this operation may require its own wasted resourses)
@@ -48,6 +50,7 @@ class GeneticAlgorithm(ABC2):
         # Store
         self.mutation_p = mutation_p
         self.n_individuals = n_individuals
+        self.crossover_p = crossover_p
 
         assert n_individuals % 2 == 0, "Population must be of even size"
 
@@ -208,10 +211,14 @@ class GeneticAlgorithm(ABC2):
         parents = tf.reshape(
             population, (n_pairs, 2, self.n_symbols, self.symbol_len))
 
+        # Probability of each crossover
+        samples = tf.random.uniform([n_pairs], 0, 1)
+        do_cross = samples < self.crossover_p
+
         # Apply
         new_population = tf.map_fn(
-            self._crossover_fn, [parents, positions], dtype=parents.dtype,
-            parallel_iterations=20,
+            self._crossover_fn, [parents, positions, do_cross],
+            dtype=parents.dtype, parallel_iterations=20,
         )
 
         # Return to population
@@ -224,6 +231,7 @@ class GeneticAlgorithm(ABC2):
         return new_population
 
     @staticmethod
+    @tf.function
     def _crossover_fn(tensor):
         """Crossover function (internal use).
 
@@ -233,7 +241,11 @@ class GeneticAlgorithm(ABC2):
         """
 
         # Inputs
-        pair, position = tensor
+        pair, position, do_cross = tensor
+
+        # Don't
+        if do_cross == False:
+            return pair
 
         # Swap
         elem0 = tf.concat((pair[0, :position, :], pair[1, position:, :]), 0)
@@ -449,7 +461,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
     def __init__(
         self, groups_spec, compute_inputs, constraints, n_inputs,
-        fitness_range, **kwargs,
+        fitness_range, n_episodes, **kwargs,
     ):
         """Initialize.
 
@@ -464,6 +476,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         :param n_inputs: Lenght of each input vector (all the same).
         :param fitness_range: min, max values of the fitness score.
             Must be positive.
+        :param n_episodes: number of episodes to run to evaluate metrics.
         :param kwargs: GeneticAlgorithm params.
         """
 
@@ -473,6 +486,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         self._constraints = constraints
         self._n_inputs = n_inputs
         self._fitness_range = fitness_range
+        self._n_episodes = n_episodes
         self._function_code_len = self._n_inputs + 1
         self._functions_list = [
             f for group in self._groups_spec for f in group["functions"]]
@@ -530,7 +544,6 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
         See this class' docstring and the temporal module.
         """
-        # TODO: Should I use more than one episode to evaluate the fitness?
 
         # Retrieve / compute the input vectors
         inputs, trace_ended = self._compute_inputs()
@@ -539,23 +552,30 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         assert len(inputs) == len(self._groups_spec), (
             "There must be one input vector for each region")
 
-        # Run an episode: observe the entire trace
-        while not trace_ended:
+        # Average scores over episodes
+        avg_consistency = avg_sensitivity = 0.0
+        for e in range(self._n_episodes):
 
-            # Predict all functions
-            predictions = self._predict_all(population, inputs)
+            # Run an episode: observe the entire trace
+            while not trace_ended:
 
-            # Update
-            self._constraints.observe(predictions)
+                # Predict and valuate predictions
+                predictions = self._predict_all(population, inputs)
+                self._constraints.observe(predictions)
 
-            # Compute next
-            inputs, trace_ended = self._compute_inputs()
+                inputs, trace_ended = self._compute_inputs()
 
-        # Compute metrics
-        consistency, sensitivity = self._constraints.compute()
+            # Compute metrics
+            consistency, sensitivity = self._constraints.compute()
+            avg_consistency += consistency
+            avg_sensitivity += sensitivity
+
+        # Average
+        avg_consistency /= self._n_episodes
+        avg_sensitivity /= self._n_episodes
 
         # Combine into fitness
-        fitness = consistency * sensitivity
+        fitness = avg_consistency * avg_sensitivity
         fmin, fmax = self._fitness_range
         fitness = fmin + (fmax - fmin) * fitness
 
@@ -563,8 +583,8 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         assert fitness.shape == [self.n_individuals]
 
         # Log
-        self.metrics["consistency"].assign(consistency)
-        self.metrics["sensitivity"].assign(sensitivity)
+        self.metrics["consistency"].assign(avg_consistency)
+        self.metrics["sensitivity"].assign(avg_sensitivity)
 
         return fitness
 

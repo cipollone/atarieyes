@@ -23,9 +23,11 @@ def main():
         sparsity_target=0.2,
         shuffle=10000,
         network_size=[50, 20],
-        population_size=5000,
+        population_size=2000,
         mutation_p=0.02,
-        fitness_range=[0, 10],
+        crossover_p=0.1,
+        fitness_range=[1, 100],
+        fitness_episodes=3,
     )
     agent_defaults = dict(
         memory_limit=1000000,
@@ -235,6 +237,10 @@ def main():
         default=features_defaults["mutation_p"],
         help="Probability of a random mutation inside the genetic algorithm.")
     features_train.add_argument(
+        "--crossover-p", type=float, metavar="PROBABILITY", dest="crossover_p",
+        default=features_defaults["crossover_p"],
+        help="Probability of crossover between each pair.")
+    features_train.add_argument(
         "--pop-size", type=int, metavar="SIZE", dest="population_size",
         default=features_defaults["population_size"],
         help="Number of individuals in the genetic algorithm.")
@@ -242,6 +248,10 @@ def main():
         "--fitness", type=int, nargs=2, metavar=("MIN", "MAX"),
         dest="fitness_range", default=features_defaults["fitness_range"],
         help="Min max values of the fitness function.")
+    features_train.add_argument(
+        "--fitness-episodes", type=int, metavar="N", dest="fitness_episodes",
+        default=features_defaults["fitness_episodes"],
+        help="Number of episodes to run to evaluate fitness")
     features_train_resuming = features_train.add_mutually_exclusive_group()
     features_train_resuming.add_argument(
         "-c", "--continue", dest="cont", type=str, metavar="FILE",
