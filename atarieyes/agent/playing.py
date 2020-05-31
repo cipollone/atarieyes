@@ -87,7 +87,7 @@ class Player:
 
         # Go
         self.kerasrl_agent.test(
-            self.env, nb_episodes=1000, visualize=self.rendering,
+            self.env, nb_episodes=10000, visualize=self.rendering,
             callbacks=self.callbacks,
         )
 

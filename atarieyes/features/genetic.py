@@ -244,7 +244,7 @@ class GeneticAlgorithm(ABC2):
         pair, position, do_cross = tensor
 
         # Don't
-        if do_cross == False:
+        if do_cross == False:  # noqa: E712    (this is Tf code)
             return pair
 
         # Swap
@@ -545,16 +545,12 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         See this class' docstring and the temporal module.
         """
 
-        # Retrieve / compute the input vectors
-        inputs, trace_ended = self._compute_inputs()
-
-        # Check
-        assert len(inputs) == len(self._groups_spec), (
-            "There must be one input vector for each region")
-
         # Average scores over episodes
         avg_consistency = avg_sensitivity = 0.0
         for e in range(self._n_episodes):
+
+            # Retrieve / compute the input vectors
+            inputs, trace_ended = self._compute_inputs()
 
             # Run an episode: observe the entire trace
             while not trace_ended:

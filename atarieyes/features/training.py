@@ -70,9 +70,8 @@ class Trainer:
             lambda: agent_player(args.env, args.stream),
             args.batch_size, self.frame_shape, args.shuffle)
         self.dataset_it = iter(dataset) if not self.model.train_step else \
-            itertools.repeat(
-                np.zeros((self.batch_size,) + self.frame_shape,
-                    dtype=np.uint8))
+            itertools.repeat(np.zeros(
+                (self.batch_size,) + self.frame_shape, dtype=np.uint8))
 
         # Optimization
         if self.decay_rate:
