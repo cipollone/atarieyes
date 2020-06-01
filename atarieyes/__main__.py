@@ -25,9 +25,9 @@ def main():
         network_size=[50, 20],
         population_size=2000,
         mutation_p=0.02,
-        crossover_p=0.1,
+        crossover_p=0.005,
         fitness_range=[1, 100],
-        fitness_episodes=3,
+        fitness_episodes=5,
     )
     agent_defaults = dict(
         memory_limit=1000000,

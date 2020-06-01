@@ -69,9 +69,8 @@ class Trainer:
         dataset = make_dataset(
             lambda: agent_player(args.env, args.stream),
             args.batch_size, self.frame_shape, args.shuffle)
-        self.dataset_it = iter(dataset) if not self.model.train_step else \
-            itertools.repeat(np.zeros(
-                (self.batch_size,) + self.frame_shape, dtype=np.uint8))
+        if not self.model.train_step:
+            self.dataset_it = iter(dataset)
 
         # Optimization
         if self.decay_rate:
@@ -105,7 +104,8 @@ class Trainer:
         # Continue previous training
         else:
             self._step = step0 = ckp_counters["step"]
-            self.valuate()
+            if not self.model.train_step:
+                self.valuate()
             self._step += 1
 
         # Training loop
