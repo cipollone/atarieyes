@@ -563,7 +563,8 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         """
 
         # Average scores over episodes
-        avg_consistency = avg_sensitivity = 0.0
+        consistencies = []
+        sensitivities = []
         for e in range(self._n_episodes):
 
             # Retrieve / compute the input vectors
@@ -580,15 +581,15 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
             # Compute metrics
             consistency, sensitivity = self._constraints.compute()
-            avg_consistency += consistency
-            avg_sensitivity += sensitivity
+            consistencies.append(consistency)
+            sensitivities.append(sensitivity)
 
-        # Average
-        avg_consistency /= self._n_episodes
-        avg_sensitivity /= self._n_episodes
+        # Combine
+        avg_consistency = tf.math.reduce_mean(consistencies, axis=0)
+        max_sensitivity = tf.math.reduce_max(sensitivities, axis=0)
 
         # Combine into fitness
-        fitness = avg_consistency * avg_sensitivity
+        fitness = avg_consistency * max_sensitivity
         fmin, fmax = self._fitness_range
         fitness = fmin + (fmax - fmin) * fitness
 
@@ -597,7 +598,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
         # Log
         self.metrics["consistency"].assign(avg_consistency)
-        self.metrics["sensitivity"].assign(avg_sensitivity)
+        self.metrics["sensitivity"].assign(max_sensitivity)
 
         return fitness
 
