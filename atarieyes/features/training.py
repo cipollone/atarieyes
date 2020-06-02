@@ -52,6 +52,7 @@ class Trainer:
             crossover_p=args.crossover_p,
             fitness_range=args.fitness_range,
             n_episodes=args.fitness_episodes,
+            exploration_k=args.exploration_k,
         )
 
         # Model

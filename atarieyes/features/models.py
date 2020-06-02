@@ -838,8 +838,8 @@ class Fluents(Model):
         :param dbn_spec: see LocalFeatures `dbn_spec`;
             the same model specification is used for all regions.
         :param ga_spec: genetic algorithm specification. A dict of:
-            "n_individuals", "mutation_p", "crossover_p", "fitness_range" and
-            "n_episodes". See BooleanFunctionsArrayGA parameters.
+            "n_individuals", "mutation_p", "crossover_p", "fitness_range",
+            "n_episodes", "exploration_k". See BooleanFunctionsArrayGA.
         :param training_layer: index of the region layer to train.
         :param training_region: name of the region to train.
             This is required if training_layer < last (== len(dbn_spec)).
