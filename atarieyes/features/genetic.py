@@ -18,6 +18,9 @@ class GeneticAlgorithm(ABC2):
     'population' and 'fitness' are two variables that store the current states
     after each training step. 'best' contains the individual with the
     highest fitness score.
+    'crossover_points' is a variable that can hold a list of integers of the
+    allowed crossover positions. This restricts the points where an individual
+    can be recombined. If every point make sense, set this to None.
 
     All subclasses should override with methods that actually work with
     tf.function (use tf.py_function, if necessary). Also, parameters described
@@ -31,6 +34,9 @@ class GeneticAlgorithm(ABC2):
 
     # A dict of metrics computed from last training step. {name: variable}
     metrics = AbstractAttribute()
+
+    # Allowed crossover position (in symbol positions)
+    crossover_points = AbstractAttribute()
 
     def __init__(self, n_individuals, mutation_p, crossover_p, trainable=True):
         """Initialize.
@@ -204,8 +210,14 @@ class GeneticAlgorithm(ABC2):
 
         # Choose crossover points
         n_pairs = tf.math.floordiv(self.n_individuals, 2)
-        positions = tf.random.uniform(
-            [n_pairs], 0, self.n_symbols, dtype=tf.int32)
+        if self.crossover_points is None:
+            positions = tf.random.uniform(
+                [n_pairs], 0, self.n_symbols, dtype=tf.int32)
+        else:
+            n_choices = len(self.crossover_points)
+            choices = tf.random.uniform(
+                [n_pairs], 0, n_choices, dtype=tf.int32)
+            positions = tf.gather(self.crossover_points, indices=choices)
 
         # Prepare individuals
         parents = tf.reshape(
@@ -313,6 +325,7 @@ class BooleanRulesGA(GeneticAlgorithm):
         # Store
         self._n_inputs = n_inputs
         self.metrics = {}
+        self.crossover_points = None
 
         # Super
         GeneticAlgorithm.__init__(self, **kwargs)
@@ -514,6 +527,10 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
                 trainable=False, name="Sensitivity_metric"),
         }
 
+        # Allowed crossovers
+        self.crossover_points = [
+            self._function_code_len * i for i in range(self._n_functions)]
+
         # Super
         GeneticAlgorithm.__init__(self, **kwargs)
 
@@ -682,6 +699,7 @@ class QueensGA(GeneticAlgorithm):
         self._n_pairs = int(
             math.factorial(size) / (2 * math.factorial(size - 2)))
         self.metrics = {}
+        self.crossover_points = None
 
         # Super
         GeneticAlgorithm.__init__(self, **kwargs)
