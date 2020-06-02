@@ -25,10 +25,9 @@ def main():
         network_size=[50, 20],
         population_size=2000,
         mutation_p=0.02,
-        crossover_p=0.005,
+        crossover_p=0.02,
         fitness_range=[1, 100],
-        fitness_episodes=5,
-        exploration_k=0.3,
+        fitness_episodes=2,
     )
     agent_defaults = dict(
         memory_limit=1000000,
@@ -253,10 +252,6 @@ def main():
         "--fitness-episodes", type=int, metavar="N", dest="fitness_episodes",
         default=features_defaults["fitness_episodes"],
         help="Number of episodes to run to evaluate fitness")
-    features_train.add_argument(
-        "--exploration-k", type=float, metavar="K", dest="exploration_k",
-        default=features_defaults["exploration_k"],
-        help="Incentive to explorate different values. Must be in [0, 1]. ")
     features_train_resuming = features_train.add_mutually_exclusive_group()
     features_train_resuming.add_argument(
         "-c", "--continue", dest="cont", type=str, metavar="FILE",

@@ -461,7 +461,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
 
     def __init__(
         self, groups_spec, compute_inputs, constraints, n_inputs,
-        fitness_range, n_episodes, exploration_k, **kwargs,
+        fitness_range, n_episodes, **kwargs,
     ):
         """Initialize.
 
@@ -477,8 +477,6 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         :param fitness_range: min, max values of the fitness score.
             Must be positive.
         :param n_episodes: number of episodes to run to evaluate metrics.
-        :param exploration_k: relative importance [0, 1] of the exploration.
-            Exploration is an incentive to traverse all final states.
         :param kwargs: GeneticAlgorithm params.
         """
 
@@ -496,11 +494,6 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
             group_i for group_i in range(len(self._groups_spec))
             for f in self._groups_spec[group_i]["functions"]]
         self._n_functions = len(self._functions_list)
-
-        # Constants
-        assert 0 <= exploration_k <= 1
-        self._sensitivity_k = exploration_k
-        self._consistency_k = 1 - exploration_k
 
         # Check
         if self._constraints is not None:
@@ -578,9 +571,7 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         avg_sensitivity /= self._n_episodes
 
         # Combine into fitness
-        fitness = (
-            avg_consistency * self._consistency_k +
-            avg_sensitivity * self._sensitivity_k)
+        fitness = avg_consistency * avg_sensitivity
         fmin, fmax = self._fitness_range
         fitness = fmin + (fmax - fmin) * fitness
 
