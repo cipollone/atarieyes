@@ -27,6 +27,8 @@ RUN apt-get -y install bash-completion git tmux \
 	python3-pip python3-venv
 # Opencv (project dependency)
 RUN apt-get -y install libsm6 libxrender-dev
+# Flloat (project dependency)
+RUN apt-get -y install graphviz
 
 # Python tools
 RUN pip3 install --no-cache-dir -U wheel setuptools pip

@@ -6,7 +6,7 @@ import gym
 import tensorflow as tf
 
 from atarieyes import layers
-from atarieyes.features import genetic, selector
+from atarieyes.features import genetic, selector, temporal
 from atarieyes.layers import BaseLayer, make_layer
 from atarieyes.tools import ABC2, AbstractAttribute
 
@@ -217,11 +217,13 @@ class BinaryRBM(Model):
         )
 
         # Register the variables
+        vars_list = ("_W", "_bv", "_bh", "_h_distribution", "_saved_v")
+        if not trainable:
+            vars_list = vars_list[0:3]
+
         model = tf.Module(name="BinaryRBM")
-        model.vars = [                           # Fix an order
-            getattr(self.layers, v) for v in
-            ("_W", "_bv", "_bh", "_h_distribution", "_saved_v")]
-        assert len(model.variables) == len(self.layers.variables)
+        model.vars = [getattr(self.layers, v) for v in vars_list]
+        assert len(model.variables) == len(vars_list)
         assert len(model.trainable_variables) == len(
             self.layers.trainable_variables)
 
@@ -710,8 +712,8 @@ class LocalFeatures(Model):
         :param region: name of the selected region.
         :param dbn_spec: specification of a `DeepBeliefNetwork`.
             This is the same argument as `layers_spec` in `DeepBeliefNetwork`.
-            `n_visible` parameters are not required, because they can be
-            inferred.
+            `n_visible` parameters are not required, because they will be
+            computed.
         :param training_layer: index of the layer to train. Can be None.
         :param resize_pixels: the input region is resized to have less than
             this number of pixels.
@@ -809,35 +811,61 @@ class LocalFeatures(Model):
 class Fluents(Model):
     """Model for binary local features.
 
-    This class is the outer Model: it represents all binary features (aka
-    fluents) defined in each Atari game.  Each environment has all fluents
-    defined in its json file: they are grouped in regions.
+    This class is the outer Model: it represents and leans all binary features
+    (aka fluents) that we define in each Atari game. These fluents are defined
+    in the json file associated to the environment. Fluents are also grouped
+    in regions.
 
-    The first part is composed of a set of LocalFeatures, one for each region.
-    Then, last layer evaluates all fluents.
+    For each region, we define an encoder composed of a DBN. I call the
+    outputs of these encoders "local features". Then, each set of local
+    features is used to compute the fluents.
+
+    Last transformation is carried on by a different model. It learns
+    the optimal boolean function of the local features whose output
+    is consistent with a temporal specification. See the temporal module for
+    info about temporal specifications. This means that when we train
+    last model, the sender should not skip any frame and all batch sizes must
+    be one.
     """
 
-    def __init__(self, env_name, dbn_spec, training_region, training_layer):
+    def __init__(
+        self, env_name, dbn_spec, ga_spec, training_layer,
+        training_region=None, receiver_gen=None, logdir=".",
+    ):
         """Initialize.
 
         :param env_name: a gym environment name.
-        :param dbn_spec: see LocalFeatures `dbn_spec`; this is used for all.
-        :param training_region: name of the region to train.
+        :param dbn_spec: see LocalFeatures `dbn_spec`;
+            the same model specification is used for all regions.
+        :param ga_spec: genetic algorithm specification. A dict of:
+            "n_individuals", "mutation_p", "crossover_p", "fitness_range" and
+            "n_episodes". See BooleanFunctionsArrayGA parameters.
         :param training_layer: index of the region layer to train.
+        :param training_region: name of the region to train.
+            This is required if training_layer < last (== len(dbn_spec)).
+        :param receiver_gen: a callable that returns a generator of data from
+            an AtariFramesReceiver. Required only if training the output layer.
+        :param logdir: directory where to put logs.
         """
 
         # Store
         self._env_name = env_name
         self._dbn_spec = dbn_spec
-        self._training_region = training_region
+        self._ga_spec = ga_spec
         self._training_layer = training_layer
+        self._training_region = training_region
+        self._training_last = (
+            training_layer == -1 or training_layer >= len(self._dbn_spec))
         self._frame_shape = gym.make(env_name).observation_space.shape
 
         # Read all regions
         env_data = selector.read_back(self._env_name)
         regions_data = env_data["regions"]
         self._region_names = list(regions_data.keys())
-        if self._training_region not in self._region_names:
+
+        if not self._training_last and (
+            self._training_region not in self._region_names
+        ):
             raise ValueError(
                 str(self._training_region) +
                 " not in " + str(self._region_names))
@@ -845,7 +873,7 @@ class Fluents(Model):
         # Order matters: prediction must be unambiguous
         self._region_names.sort()
 
-        # Collect fluents and their specification
+        # Collect all symbols (fluents) we have defined
         self.fluents = []
         for region_name in self._region_names:
             region = regions_data[region_name]
@@ -858,45 +886,145 @@ class Fluents(Model):
                 self.fluents.append(fluent_name)
 
         # One encoding for each region
-        self.local_features = {
+        self.encodings = {
             region: LocalFeatures(
-                env_name=self._env_name, region=region,
-                dbn_spec=self._dbn_spec, training_layer=(
-                    self._training_layer if self._training_region == region
-                    else None),
+                env_name=self._env_name,
+                region=region,
+                dbn_spec=self._dbn_spec,
+                training_layer=(
+                    self._training_layer if not self._training_last
+                    and self._training_region == region else None),
             ) for region in self._region_names
         }
 
-        # NOTE: last layer is still missing because it should be different.
+        # Load temporal constraints. These are common to all regions
+        self._constraints = temporal.TemporalConstraints(
+            env_name=self._env_name,
+            fluents=self.fluents,
+            n_functions=self._ga_spec["n_individuals"],
+            logdir=logdir,
+        ) if self._training_last else None
+
+        # Input pipeline for the last layer
+        if self._training_last:
+
+            # Create a dataset that returns the exact sequence of frames
+            dataset = tf.data.Dataset.from_generator(
+                lambda: Fluents._compute_inputs_gen(receiver_gen),
+                output_types=(tf.uint8, tf.bool),
+                output_shapes=(
+                    tf.TensorShape(self._frame_shape), tf.TensorShape([])),
+            )
+            dataset = dataset.prefetch(5)
+
+            self._frames_sequence_it = iter(dataset)
+
+        # Last model is a Genetic Algorithm
+        groups_spec = [{
+                "name": region,
+                "functions": [f for f in regions_data[region]["fluents"]]
+            } for region in self._region_names
+        ]
+        self.output_model = GeneticModel(
+            genetic.BooleanFunctionsArrayGA(
+                groups_spec=groups_spec,
+                compute_inputs=self._compute_encoding_fn,
+                constraints=self._constraints,
+                n_inputs=self._dbn_spec[-1]["n_hidden"],
+                trainable=self._training_last,
+                **self._ga_spec,
+            )
+        )
 
         # Register the variables
         model = tf.Module(name="Fluents")
         for region in self._region_names:
             namespace = "region_" + region
-            setattr(model, namespace, self.local_features[region].model)
-        assert len(model.variables) == sum(
+            setattr(model, namespace, self.encodings[region].model)
+        model.output_model = self.output_model.model
+
+        assert len(model.variables) == (sum(
             [len(inner.model.variables)
-                for inner in self.local_features.values()])
-        assert len(model.trainable_variables) == sum(
+                for inner in self.encodings.values()]) +
+            len(self.output_model.model.variables))
+        assert len(model.trainable_variables) == (sum(
             [len(inner.model.trainable_variables)
-                for inner in self.local_features.values()])
+                for inner in self.encodings.values()]) +
+            len(self.output_model.model.trainable_variables))
 
         # Save
         self.model = model
-        self.computed_gradient = True
-        self.train_step = False
+        self.computed_gradient = not self._training_last
+        self.train_step = (
+            self.output_model.train_step if self._training_last else None)
+
+    @staticmethod
+    def _compute_inputs_gen(receiver_gen):
+        """Adapt the receiver output for BooleanFunctionsArrayGA.
+
+        :param receiver_gen: a callable that returns a generator of data from
+            an AtariFramesReceiver.
+        :return: a generator that returns a frame and a boolean flag.
+            True indicates that the episode ended and the frame can be
+            discarded.
+        """
+
+        # Create the generator
+        gen = receiver_gen()
+
+        while True:
+
+            # Receive
+            frame, termination = next(gen)
+
+            # Signal end of trace
+            assert termination in ("continue", "repeated_last")
+            flag = (termination == "repeated_last")
+
+            yield frame, flag
+
+    def _compute_encoding_fn(self):
+        """Makes a new prediction for the encoding layer.
+
+        BooleanFunctionsArrayGA requires a callable which returns
+        its inputs vector. This function serves this purpose.
+
+        :return: a single inputs vector.
+        """
+
+        # Next batch of one frame
+        frame, trace_ended = next(self._frames_sequence_it)
+        inputs = tf.expand_dims(frame, 0)
+
+        # Encoded regions
+        encoded = self._encoding_predict(inputs)
+
+        # Strip batch dimension
+        encoded = [batch[0] for batch in encoded]
+
+        return encoded, trace_ended
 
     def compute_all(self, inputs):
         """Compute all tensors."""
 
-        # The first is the output of a prediction
-        prediction = self.predict(inputs)
+        # Check
+        if self._training_last and inputs.shape[0] != 1:
+            raise ValueError(
+                "When training the last layer, batch size must be 1")
+
+        # The first output is a prediction
+        encodings = self._encoding_predict(inputs)
+        predictions = self.output_model.ga.predict(encodings)
 
         # Then, training data follow
-        ret = self.local_features[self._training_region].compute_all(inputs)
+        if self._training_last:
+            ret = self.output_model.compute_all(encodings)
+        else:
+            training_model = self.encodings[self._training_region]
+            ret = training_model.compute_all(inputs)
 
         # Merge
-        ret["outputs"].insert(0, prediction)
+        ret["outputs"].insert(0, predictions)
         return ret
 
     def predict(self, inputs):
@@ -906,44 +1034,73 @@ class Fluents(Model):
         :return: batch of values for all fluents.
         """
 
+        encodings = self._encoding_predict(inputs)
+        predictions = self.output_model.ga.predict(encodings)
+
+        return predictions
+
+    def _encoding_predict(self, inputs):
+        """Forward pass only for the encoding part.
+
+        :param inputs: a batch of inputs (usually batch of frames).
+        :return: a sequence of batched encoding (one for each region)
+        """
+
         predictions = [
-            self.local_features[region].predict(inputs)
-            for region in self._region_names]
-        predictions = tf.concat(predictions, axis=1)
+            self.encodings[region].predict(inputs)
+            for region in self._region_names
+        ]
 
         return predictions
 
     def images(self, outputs):
         """Images to visualize."""
 
-        # The first come from this model and its not an image
-        outputs = outputs[1:]
+        # Collect images from training model
+        if not self._training_last:
 
-        # Collect all images and add a namescope
-        all_imgs = {}
-        for region in self._region_names:
-            imgs = self.local_features[region].images(outputs)
+            # From regions
+            outputs = outputs[1:]   # The first comes from this model
+            imgs = self.encodings[self._training_region].images(outputs)
             imgs = {
-                region + "/" + name: img for name, img in imgs.items()}
-            all_imgs.update(imgs)
+                self._training_region + "/" + name: img
+                for name, img in imgs.items()}
 
-        return all_imgs
+        else:
+            # From output model
+            imgs = self.output_model.images(outputs)
+            imgs = {"output_model/" + name: img for name, img in imgs.items()}
+
+        return imgs
 
     def histograms(self, outputs):
         """Tensors to visualize."""
 
-        # The first come from this model and its a duplicate
-        outputs = outputs[1:]
+        out_hists = {}
 
-        # Collect all histograms and add a namescope
-        all_hists = {}
-        for region in self._region_names:
-            hists = self.local_features[region].histograms(outputs)
+        # Collect histograms from training model
+        if not self._training_last:
+
+            # The first comes from this model
+            out_hists["fluents/prediction"] = outputs[0]
+            outputs = outputs[1:]
+
+            # From regions
+            hists = self.encodings[self._training_region].histograms(outputs)
             hists = {
-                region + "/" + name: hist for name, hist in hists.items()}
-            all_hists.update(hists)
+                self._training_region + "/" + name: hist
+                for name, hist in hists.items()}
+            out_hists.update(hists)
 
-        return all_hists
+        else:
+            # From output model
+            hists = self.output_model.histograms(outputs)
+            hists = {
+                "output_model/" + name: hist
+                for name, hist in hists.items()}
+            out_hists.update(hists)
+
+        return out_hists
 
 
 class GeneticModel(Model):
@@ -952,6 +1109,9 @@ class GeneticModel(Model):
     A GeneticAlgorithm is not a I/O Model. This class is only used to fit
     the algorithm into the same training loop, with merics.
     This model represents the training procedure, not the individuals.
+
+    NOTE: due to the large number of small tf ops, this model trains faster
+    on cpu.
     """
 
     def __init__(self, ga):
@@ -969,7 +1129,7 @@ class GeneticModel(Model):
 
         # Register the variables
         model = tf.Module(name="GeneticModel")
-        model.vars = [self.ga.population, self.ga.fitness]
+        model.vars = [self.ga.population, self.ga.fitness, self.ga.best]
 
         # Save
         self.model = model
@@ -978,18 +1138,19 @@ class GeneticModel(Model):
     def compute_all(self, inputs):
         """Nothing to compute. Just show the training graph."""
 
-        population, fitness = self.ga.compute_train_step(*inputs)
-        mean_fitness = tf.math.reduce_mean(fitness)
-        max_fitness = tf.math.reduce_max(fitness)
+        # Compute
+        population, fitness = self.ga.compute_train_step(
+            self.ga.population, self.ga.fitness)
+
+        # Collect metrics
+        metrics = dict(self.ga.metrics)
+        metrics["fitness"] = fitness
 
         # Ret
         ret = dict(
             outputs=[population, fitness],
             loss=None,
-            metrics=dict(
-                mean_fitness=mean_fitness,
-                max_fitness=max_fitness,
-            ),
+            metrics=metrics,
             gradients=None,
         )
         return ret
@@ -1026,15 +1187,15 @@ class GeneticModel(Model):
         population = tf.cast(outputs[0], dtype=tf.float32)
         population = tf.reshape(population, shape=(population.shape[0], -1))
 
-            # Standardinzation (per features, not per individual)
+        #   Standardinzation (per features, not per individual)
         mean = tf.math.reduce_mean(population, axis=1, keepdims=True)
         var = tf.math.reduce_variance(population, axis=1, keepdims=True)
         pop_std = (population - mean) / tf.math.sqrt(var)
 
-            # Svd
+        #   Svd
         s, u, v = tf.linalg.svd(pop_std)
         singv = u[:, 0]
-            # Flip basis
+        #   Flip basis
         if hasattr(self, "_last_svd_singv"):
             diff_plus = tf.math.reduce_sum(
                 tf.math.abs(singv - self._last_svd_singv))
@@ -1049,21 +1210,7 @@ class GeneticModel(Model):
         tensors = {
             "fitness": outputs[1],
             "population_pca": population_pca,
+            **self.ga.metrics,
         }
 
         return tensors
-
-
-class TestingGM(GeneticModel):
-    """Just for debugging."""
-
-    def __init__(self):
-
-        GeneticModel.__init__(
-            self, genetic.QueensGA(
-                size=10, n_individuals=1000, mutation_p=0.005))
-
-    def compute_all(self, inputs):
-
-        return GeneticModel.compute_all(
-            self, (self.ga.population, self.ga.fitness))

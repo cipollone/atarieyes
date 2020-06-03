@@ -2,6 +2,7 @@
 
 import os
 import json
+import itertools
 import gym
 import numpy as np
 import tensorflow as tf
@@ -38,24 +39,38 @@ class Trainer:
         self.env = gym.make(args.env)
         self.frame_shape = self.env.observation_space.shape
 
-        # Dataset
-        dataset = make_dataset(
-            lambda: agent_player(args.env, args.stream),
-            args.batch_size, self.frame_shape, args.shuffle)
-        self.dataset_it = iter(dataset)
-
-        # Model
-        network_spec = [dict(
+        # Model hyper-parameters
+        encoding_spec = [dict(
                 n_hidden=units, batch_size=args.batch_size,
                 l2_const=args.l2_const, sparsity_const=args.sparsity_const,
                 sparsity_target=args.sparsity_target,
             ) for units in args.network_size
         ]
-        self.model = models.Fluents(
-            env_name=args.env, dbn_spec=network_spec,
-            training_region=args.train_region_layer[0],
-            training_layer=int(args.train_region_layer[1]),
+        genetic_spec = dict(
+            n_individuals=args.population_size,
+            mutation_p=args.mutation_p,
+            crossover_p=args.crossover_p,
+            fitness_range=args.fitness_range,
+            n_episodes=args.fitness_episodes,
         )
+
+        # Model
+        self.model = models.Fluents(
+            env_name=args.env,
+            dbn_spec=encoding_spec,
+            ga_spec=genetic_spec,
+            training_layer=int(args.train_region_layer[1]),
+            training_region=args.train_region_layer[0],
+            receiver_gen=lambda: atari_frames_generator(args.env, args.stream),
+            logdir=log_path,
+        )
+
+        # Define the dataset and initialize it (if not custom training loop)
+        dataset = make_dataset(
+            lambda: agent_player(args.env, args.stream),
+            args.batch_size, self.frame_shape, args.shuffle)
+        if not self.model.train_step:
+            self.dataset_it = iter(dataset)
 
         # Optimization
         if self.decay_rate:
@@ -89,7 +104,8 @@ class Trainer:
         # Continue previous training
         else:
             self._step = step0 = ckp_counters["step"]
-            self.valuate()
+            if not self.model.train_step:
+                self.valuate()
             self._step += 1
 
         # Training loop
@@ -139,6 +155,7 @@ class Trainer:
         """Compute the metrics on one batch and save a log.
 
         When 'outputs' is not given, it runs the model to compute the metrics.
+        When metrics are not scalars, it prints their mean and max value.
 
         :param outputs: (optional) outputs returned by Model.compute_all.
         :return: the saved quantities (metrics and loss)
@@ -149,7 +166,7 @@ class Trainer:
             frames = next(self.dataset_it)
             outputs = self._model_compute_all(frames)
 
-        # Log scalars
+        # Collect all metrics
         metrics = {
             "metrics/" + name: value
             for name, value in outputs["metrics"].items()}
@@ -157,7 +174,19 @@ class Trainer:
             metrics["loss"] = outputs["loss"]
         metrics["learning_rate"] = self.learning_rate if not self.decay_rate \
             else self.learning_rate(self._step)
-        self.logger.save_scalars(self._step, metrics)
+
+        # Log scalars (convert to mean max if necessary)
+        scalars = {}
+        for name, value in metrics.items():
+            is_scalar = (
+                isinstance(value, int) or isinstance(value, float) or
+                value.ndim == 0)
+            if is_scalar:
+                scalars[name] = value
+            else:
+                scalars[name + "_mean"] = tf.math.reduce_mean(value)
+                scalars[name + "_max"] = tf.math.reduce_max(value)
+        self.logger.save_scalars(self._step, scalars)
 
         # Log images
         images = self.model.images(outputs["outputs"])
@@ -167,13 +196,13 @@ class Trainer:
         histograms = self.model.histograms(outputs["outputs"])
         self.logger.save_histogram(self._step, histograms)
 
-        # Transform tensors to scalars for nice logs
-        metrics = {
+        # Transform tensors to arrays for nice logs
+        scalars = {
             name: var.numpy() if isinstance(var, tf.Tensor) else var
-            for name, var in metrics.items()
+            for name, var in scalars.items()
         }
 
-        return metrics
+        return scalars
 
     @tf.function
     def _model_compute_all(self, inputs):
@@ -253,7 +282,7 @@ class CheckpointSaver:
         """
 
         # Restore
-        self.checkpoint.restore(path)
+        self.checkpoint.restore(path).expect_partial()
         print("> Loaded:", path)
 
         # Read counters
@@ -300,7 +329,7 @@ class TensorBoardLogger:
         """Visualize scalar metrics in TensorBoard.
 
         :param step: the step number
-        :param metrics: a dict of (name: value)
+        :param metrics: a dict of (name: value), where value is a scalar
         """
 
         # Save
@@ -349,15 +378,9 @@ def make_dataset(game_player, batch, frame_shape, shuffle_size):
     :return: Tensorflow Dataset.
     """
 
-    # Extract observations
-    def frame_iterate():
-        env_step = game_player()
-        while True:
-            yield next(env_step)
-
     # Dataset
     dataset = tf.data.Dataset.from_generator(
-        frame_iterate, output_types=tf.uint8, output_shapes=frame_shape)
+        game_player, output_types=tf.uint8, output_shapes=frame_shape)
 
     dataset = dataset.shuffle(shuffle_size)
     dataset = dataset.batch(batch)
@@ -408,14 +431,42 @@ def random_player(env_name, render=False):
     env.close()
 
 
-def agent_player(env_name, ip="localhost"):
-    """Returns frame from a trained agent.
+def agent_player(env_name, ip):
+    """Returns frames from a remote player.
 
     This requires a running instance of `atarieyes agent play`.
 
     :param env_name: name of an Atari Gym environment
     :param ip: machine where the agent is playing
     :return: a generator of frames
+    """
+
+    # Create the main generator
+    receiver_gen = atari_frames_generator(env_name, ip)
+
+    # Loop
+    while True:
+
+        # Receive
+        frame, termination = next(receiver_gen)
+
+        # Skip if repeated
+        assert termination in ("continue", "last", "repeated_last")
+        if termination == "repeated_last":
+            continue
+
+        # Return
+        yield frame
+
+
+def atari_frames_generator(env_name, ip):
+    """Returns data from an AtariFramesReceiver.
+
+    This requires a running instance of `atarieyes agent play`.
+
+    :param env_name: name of an Atari Gym environment
+    :param ip: machine where the agent is playing
+    :return: See AtariFramesReceiver for the return type
     """
 
     print("> Waiting for a stream of frames from:", ip)

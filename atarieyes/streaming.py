@@ -202,7 +202,20 @@ class Receiver:
 
 
 class AtariFramesSender(Sender):
-    """Transmitter class for frames of Atari games."""
+    """Transmitter class for frames of Atari games.
+
+    Each message contains the frame and a termination flag:
+        "continue": frames will follow
+        "last": this is the last
+        "repeated_last": this is a repeated last frame
+            (late detection of last frame)
+    """
+
+    _termination_flags = {
+        "continue": b'\x00',
+        "last": b'\x01',
+        "repeated_last": b'\x02',
+    }
 
     def __init__(self, env_name):
         """Initialize.
@@ -214,7 +227,7 @@ class AtariFramesSender(Sender):
         env = gym.make(env_name)
         frame = env.observation_space.sample()
         assert frame.dtype == np.uint8
-        size = len(frame.tobytes())
+        size = len(frame.tobytes()) + 1
 
         # Super
         Sender.__init__(self, size, wait=True)
@@ -225,14 +238,17 @@ class AtariFramesSender(Sender):
         print("    (pause)", end="")
         input()   # Leave some time to connect
 
-    def send(self, frame):
+    def send(self, frame, termination):
         """Send a frame.
 
         :param data: a numpy array
+        :param termination: termination flag. Must be one of
+            "continue", "last", "repeated_last".
         :return: True if the data was correctly pushed to the sending queue
         """
 
-        Sender.send(self, frame.tobytes())
+        msg = frame.tobytes() + self._termination_flags[termination]
+        Sender.send(self, msg)
 
 
 class AtariFramesReceiver(Receiver):
@@ -248,8 +264,14 @@ class AtariFramesReceiver(Receiver):
         # Discover frame shape
         env = gym.make(env_name)
         frame = env.observation_space.sample()
-        size = len(frame.tobytes())
+        size = len(frame.tobytes()) + 1
         self.frame_shape = frame.shape
+
+        # Consistent termination flags
+        AtariFramesReceiver._termination_flags = {
+            AtariFramesSender._termination_flags[key]: key
+            for key in AtariFramesSender._termination_flags.keys()
+        }
 
         # Super
         Receiver.__init__(self, size, ip, wait=True)
@@ -261,6 +283,8 @@ class AtariFramesReceiver(Receiver):
         """Return a received frame of the game.
 
         See Receiver.receive.
+
+        :return: frame and termination flag
         """
 
         # Get
@@ -268,11 +292,17 @@ class AtariFramesReceiver(Receiver):
         if data is None:
             return None
 
+        # Split
+        frame_data, termination_data = data[:-1], data[-1:]
+
         # To frame
-        frame = np.frombuffer(data, dtype=np.uint8)
+        frame = np.frombuffer(frame_data, dtype=np.uint8)
         frame = np.reshape(frame, self.frame_shape)
 
-        return frame
+        # Termination
+        termination = self._termination_flags[termination_data]
+
+        return frame, termination
 
 
 def display_atari_frames(env_name, ip):
@@ -300,7 +330,7 @@ def display_atari_frames(env_name, ip):
 
         # Parse frame
         try:
-            frame = receiver.receive(wait=True)
+            frame, _ = receiver.receive(wait=True)
         except ConnectionAbortedError:
             break
 

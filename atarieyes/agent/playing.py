@@ -87,7 +87,7 @@ class Player:
 
         # Go
         self.kerasrl_agent.test(
-            self.env, nb_episodes=1000, visualize=self.rendering,
+            self.env, nb_episodes=10000, visualize=self.rendering,
             callbacks=self.callbacks,
         )
 
@@ -113,6 +113,7 @@ class Streamer(Callback):
         self.sender = AtariFramesSender(env_name)
         self.skip_frames = skip_frames
         self._skips_left = 0
+        self._last_frame = None
 
     def on_step_end(self, step, logs={}):
         """Send each frame."""
@@ -120,10 +121,16 @@ class Streamer(Callback):
         # Collect a frame
         if not self.skip_frames or self._skips_left == 0:
             frame = logs["raw_observation"]
-            self.sender.send(frame)
+            self._last_frame = frame
+            self.sender.send(frame, "continue")
 
         # Update
         if self.skip_frames:
             self._skips_left -= 1
             if self._skips_left <= 0:
                 self._skips_left = np.random.randint(0, self.skip_frames+1)
+
+    def on_episode_end(self, episode, logs={}):
+        """Singnal the end of an episode."""
+
+        self.sender.send(self._last_frame, "repeated_last")
