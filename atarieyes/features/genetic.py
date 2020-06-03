@@ -641,8 +641,16 @@ class BooleanFunctionsArrayGA(GeneticAlgorithm):
         Overriding the default behaviour with a custom selection.
         """
 
-        fittest = self.population[tf.math.argmax(self.metrics["consistency"])]
-        self.best.assign(fittest)
+        # Maximize on consistency
+        max_consistency = tf.math.reduce_max(self.metrics["consistency"])
+        idx = tf.where(self.metrics["consistency"] == max_consistency)[:, 0]
+        selected = tf.gather(self.population, idx)
+
+        # Maximize on sensitivity
+        selected_sensitivity = tf.gather(self.metrics["sensitivity"], idx)
+        selected = selected[tf.math.argmax(selected_sensitivity)]
+
+        self.best.assign(selected)
 
     def predict(self, inputs):
         """Make a prediction with the fittest individual.

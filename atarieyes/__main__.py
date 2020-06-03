@@ -23,10 +23,10 @@ def main():
         sparsity_target=0.2,
         shuffle=10000,
         network_size=[50, 20],
-        population_size=2000,
+        population_size=5000,
         mutation_p=0.02,
         crossover_p=0.02,
-        fitness_range=[1, 100],
+        fitness_range=[30, 100],
         fitness_episodes=2,
     )
     agent_defaults = dict(
