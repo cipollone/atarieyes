@@ -244,7 +244,6 @@ class AtariFramesSender(Sender):
         :param data: a numpy array
         :param termination: termination flag. Must be one of
             "continue", "last", "repeated_last".
-        :return: True if the data was correctly pushed to the sending queue
         """
 
         msg = frame.tobytes() + self._termination_flags[termination]
@@ -303,6 +302,97 @@ class AtariFramesReceiver(Receiver):
         termination = self._termination_flags[termination_data]
 
         return frame, termination
+
+
+class StateRewardSender(Sender):
+    """Sends an integer state and a reward.
+
+    These informations are usually provided by the Restraining Bolt to the
+    RL agent.
+    """
+
+    # Store static information
+    _format = [
+        np.array(0, dtype=np.int32),
+        np.array(0.0, dtype=np.float32),
+    ]
+    _msg_len = sum((len(d.tobytes()) for d in _format))
+
+    def __init__(self):
+        """Initialize."""
+
+        # Super
+        Sender.__init__(self, self._msg_len, wait=True)
+
+        # Start
+        self.start()
+        print(
+            "> Serving (state, reward) on", self.server.server_address,
+            "   (pause)", end="")
+        input()   # Leave some time to connect
+
+    def send(self, state, reward):
+        """Send a message.
+
+        :param state: a scalar int
+        :param reward: a float reward
+        """
+        
+        # Serialize
+        inputs = [state, reward]
+        msg = [
+            np.array(data, dtype=field.dtype).tobytes()
+            for data, field in zip(inputs, self._format)
+        ]
+        msg = b''.join(msg)
+
+        # Send
+        Sender.send(self, msg)
+
+
+class StateRewardReceiver(Receiver):
+    """Receiver class for StateRewardSender."""
+
+    # Store static
+    _fields_len = [len(d.tobytes()) for d in StateRewardSender._format]
+    _fields_start = [int(i) for i in np.cumsum(_fields_len) - _fields_len[0]]
+
+    def __init__(self, ip):
+        """Initialize.
+
+        :param ip: source ip address (str)
+        """
+
+        # Super
+        Receiver.__init__(
+            self, msg_length=StateRewardSender._msg_len, ip=ip, wait=True)
+
+        # Start
+        self.start()
+
+    def receive(self):
+        """Return a received message.
+
+        If a message was not received, it waits.
+
+        :return: See the relative sender for the message format
+        """
+
+        # Get
+        data = Receiver.receive(self, wait=True)
+
+        # Parse
+        fields = [
+            data[start:start + length]
+            for start, length in zip(self._fields_start, self._fields_len)
+        ]
+        data = [
+            np.reshape(
+                np.frombuffer(field, dtype=fformat.dtype), fformat.shape)
+            for field, fformat in zip(fields, StateRewardSender._format)
+        ]
+
+        return data
 
 
 def display_atari_frames(env_name, ip):
