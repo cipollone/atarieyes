@@ -254,12 +254,11 @@ def main():
         help="Number of episodes to run to evaluate fitness")
     features_train_resuming = features_train.add_mutually_exclusive_group()
     features_train_resuming.add_argument(
-        "-c", "--continue", dest="cont", type=str, metavar="FILE",
-        help="Continue training from checkpoint (with tf extension)")
+        "-c", "--continue", dest="cont", type=str, metavar="FILE.tf",
+        help="Continue training from checkpoint")
     features_train_resuming.add_argument(
-        "-i", "--init", dest="initialize", type=str, metavar="FILE",
-        help="Start from step 0 but initialize from checkpoint "
-        "(with tf extension")
+        "-i", "--init", dest="initialize", type=str, metavar="FILE.tf",
+        help="Start from step 0 but initialize from checkpoint ")
 
     # Feature selection op
     feature_select = features_op.add_parser(
@@ -267,6 +266,17 @@ def main():
     feature_select.add_argument(
         "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
+
+    # RestrainingBolt op
+    features_rb = features_op.add_parser(
+        "rb", help="Start a Restraining Bolt from trained features")
+
+    features_rb.add_argument(
+        "args_file", type=str,
+        help="Json file of arguments of a previous training")
+    features_rb.add_argument(
+        "-i", "--init", dest="initialize", type=str, metavar="FILE.tf",
+        required=True, help="Load model weights from checkpoint")
 
     args = parser.parse_args()
 
@@ -289,6 +299,9 @@ def main():
         elif args.op == "select":
             import atarieyes.features.selector as features_selector
             features_selector.selection_tool(args)
+        elif args.op == "rb":
+            import atarieyes.features.rb as features_rb
+            features_rb.Runner(args).run()
 
 
 def _environment_names():
