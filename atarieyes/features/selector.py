@@ -25,7 +25,8 @@ environment. This is an example:
           ]
         }
       },
-      "constraints": []
+      "constraints": [],
+      "restraining_bolt": []
     }
 
 "_frame" contains the coordinates of a large crop of the entire frame
@@ -35,19 +36,25 @@ for the only defined region (it could be any name). "region" holds
 the coordinates for its crop. "fluents" holds a list of symbols. Each of them
 is a propositional atom that is evaluated on this region. All flents must
 be named with a prefix of the region ("abbrev") + underscore + any name.
-Finally, "constraints" is a list of temporal LDLf formulae that declares how
+"constraints" is a list of temporal LDLf formulae that declares how
 the fluents you define are expected to change and how are they related with
 each other. All the expessions are merged and joined in a single conjunction.
 I keep them as a list here just because it might be easier to read them
 (use parentheses if uncertain).
+"restraining_bolt" is a list of temporal LDLf expressions on fluents, just like
+contraints. Their purpose is to specify agent behaviours to be rewarded.
+This field is not needed for the pure features extraction.
 
-The selector tool of this module allows to write all fields except "fluents"
-and "constraints" which you can easily add manually to the json file.
+
+The selector tool of this module allows to write all fields except "fluents",
+"constraints" and "restraining_bolt" which you can easily add manually to the
+json file.
 """
 
 import gym
 import json
 import os
+from collections import OrderedDict
 import numpy as np
 import cv2 as cv
 
@@ -124,17 +131,18 @@ def selection_tool(args):
         } for name, abbrev, selection in zip(
             selection_names, selection_abbrev, selections)
     }
-    data = {
-        "_frame": [box[0], box[1], box[0] + box[2], box[1] + box[3]],
-        "regions": regions,
-        "constraints": [],
-    }
+    data = OrderedDict([
+        ("_frame", [box[0], box[1], box[0] + box[2], box[1] + box[3]]),
+        ("regions", regions),
+        ("constraints", []),
+        ("restraining_bolt", []),
+    ])
 
     # Save
     env_file = os.path.join(info_dir, env.spec.id + ".json")
     os.makedirs(info_dir, exist_ok=True)
     with open(env_file, "w") as f:
-        json.dump(data, f, indent=2, sort_keys=True)
+        json.dump(data, f, indent=2)
 
 
 def read_back(env_name):

@@ -1,0 +1,39 @@
+{
+  "_frame": [
+    0,
+    47,
+    160,
+    180
+  ],
+  "regions": {
+    "rope0": {
+      "abbrev": "rope0",
+      "fluents": ["rope0_at"],
+      "region": [
+        109,
+        116,
+        116,
+        132
+      ]
+    },
+    "start": {
+      "abbrev": "start",
+      "fluents": ["start_at"],
+      "region": [
+        74,
+        79,
+        87,
+        87
+      ]
+    }
+  },
+  "constraints": [
+		"start_at",
+		"[true*](!start_at | !rope0_at)",
+		"[true*; start_at]!rope0_at",
+		"[true*; rope0_at]!start_at"
+	],
+	"restraining_bolt": [
+		"<true*; rope0_at>tt"
+	]
+}
