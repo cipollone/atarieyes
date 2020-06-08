@@ -70,7 +70,6 @@ class Runner:
         This assumes a running instance of an agent.
         """
 
-        # TODO: react to this message. Assert not nan in receiver
         # Special message: transmit the number of states
         self.rb_sender.send(len(self.states_map), float("nan"))
 

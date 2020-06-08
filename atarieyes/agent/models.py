@@ -138,6 +138,7 @@ class AtariAgent(QAgentDef):
             # Standard processing
             observation = self.process_observation(observation)
             reward = self.process_reward(reward)
+            done = self.process_done(done)
             info = self.process_info(info)
 
             # Early termination
@@ -175,13 +176,18 @@ class AtariAgent(QAgentDef):
 
             return np.clip(reward, -1., 1.)
 
+        def process_done(self, done):
+            """Process "done" boolean flag; do nothing."""
+
+            return done
+
         def process_state_batch(self, batch):
             """Process a batch of states.
 
             Each batch is a composed of sequences of frames.
             """
 
-            processed_batch = batch.astype("float32") / 255.
+            processed_batch = batch.astype(np.float32) / 255.
             return processed_batch
 
         def process_memory(self, observation, action, reward, terminal):
@@ -202,6 +208,121 @@ class AtariAgent(QAgentDef):
                 terminal = True
 
             return observation, action, reward, terminal
+
+
+class RestrainedAtariAgent(AtariAgent):
+    """Atari agent + Restraining Bolt."""
+
+    def __init__(self, env_name, training, frames_sender, rb_receiver):
+        """Initialize.
+
+        :param env_name: name of an Atari gym environment.
+        :param training: boolean training flag.
+        :param frames_sender: an instance of AtariFramesSender
+        :param rb_receiver: an instance of StateRewardReceiver
+        """
+
+        # Init
+        env = gym.make(env_name)
+        self.n_actions = env.action_space.n        # discrete in Atari
+
+        # Number of states of the RestrainingBolt
+        print("> Waiting init message from a connected RB")
+        n_states, nan = rb_receiver.receive()
+        n_states = int(n_states)
+        if not np.isnan(nan):
+            raise ValueError(
+                "Expected NaN for this first message. Bad synchronization "
+                "in StateReward stream")
+
+        # Build models
+        self.model = self._build_model()
+        self.processor = self.Processor(
+            env_name=env_name,
+            resize_shape=self.resize_shape,
+            one_life=True if training else False,  # for clarity
+            frames_sender=frames_sender,
+            rb_receiver=rb_receiver,
+        )
+        # TODO: build custom model
+
+    class Processor(AtariAgent.Processor):
+        """This processor inserts the Restraining Bolt into the loop."""
+
+        def __init__(self, frames_sender, rb_receiver, **kwargs):
+            """Initialize.
+
+            :param frames_sender: an instance of AtariFramesSender
+            :param rb_receiver: an instance of StateRewardReceiver
+            :param kwargs: arguments of the basic processor.
+            """
+
+            # Super
+            AtariAgent.Processor.__init__(self, **kwargs)
+
+            # Store
+            self._frames_sender = frames_sender
+            self._rb_receiver = rb_receiver
+            self._rb_reward = None
+            self._last_frame = None
+
+        def process_observation(self, observation):
+            """Process and observation.
+
+            The state of the restraining bolt is also part of the observation.
+            """
+
+            # Send this observation to RB
+            self._frames_sender.send(observation, "continue")
+            self._last_frame = observation
+
+            # Standard processor
+            processed = AtariAgent.Processor.process_observation(
+                self, observation)
+
+            # Receive from RB
+            state, self._rb_reward = self._rb_receiver.receive()
+
+            return processed, state
+
+        def process_reward(self, reward):
+            """Add the RB reward."""
+
+            # Standard processor
+            processed = AtariAgent.Processor.process_reward(self, reward)
+
+            # RB reward
+            processed += self._rb_reward
+
+            return processed
+
+        def process_done(self, done):
+            """Notify the end of an episode."""
+
+            # Notify, if end of an episode
+            if done:
+                self._frames_sender.send(self._last_frame, "repeated_last")
+
+            return done
+        
+        def process_state_batch(self, batch):
+            """Process a batch of states."""
+
+            batch_size, window_length = batch.shape[0:2]
+
+            # Combine frames together
+            frames = batch[:, :, 0]
+            frames = np.reshape(frames, [-1])
+            frames = np.stack(frames, axis=0)
+            frames = np.reshape(
+                frames, [batch_size, window_length, *frames.shape[1:]])
+
+            # Combine states together (take the first of each window)
+            states = batch[:, 0, 1]
+            states = np.stack(states)
+
+            # TODO: also return states when the model is ready
+            return frames
 
 
 class EpisodeRandomEpsPolicy(Policy):

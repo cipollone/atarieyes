@@ -11,9 +11,8 @@ from rl.agents.dqn import DQNAgent
 from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.callbacks import Callback, FileLogger
 
-from atarieyes import streaming
-from atarieyes.tools import Namespace, prepare_directories
-from atarieyes.agent.models import AtariAgent, EpisodeRandomEpsPolicy
+from atarieyes import streaming, tools
+from atarieyes.agent import models
 
 
 class Trainer:
@@ -30,7 +29,7 @@ class Trainer:
         self.initialize_from = args.cont
 
         # Dirs
-        model_path, log_path = prepare_directories(
+        model_path, log_path = tools.prepare_directories(
             "agent", args.env, resuming=self.resuming, args=args)
         log_filename = "log.json"
         self.log_file = os.path.join(log_path, log_filename)
@@ -50,7 +49,8 @@ class Trainer:
             tf.random.set_seed(30013)
 
         # Agent
-        self.kerasrl_agent = self.build_agent(Namespace(args, training=True))
+        self.kerasrl_agent = self.build_agent(
+            tools.Namespace(args, training=True))
 
         # Tools
         self.saver = CheckpointSaver(
@@ -66,15 +66,6 @@ class Trainer:
         if args.random_epsilon:
             self.callbacks.append(self.kerasrl_agent.test_policy.callback)
 
-        # Connections with the Restraining Bolt
-        if args.rb_address is not None:
-
-            self.frames_sender = streaming.AtariFramesSender(args.env)
-            self.rb_receiver = streaming.StateRewardReceiver(args.rb_address)
-
-            # TODO: push these inside the processor.
-
-
     @staticmethod
     def build_agent(spec):
         """Defines a Keras-rl agent, ready for training.
@@ -86,9 +77,22 @@ class Trainer:
         env = gym.make(spec.env)
         n_actions = env.action_space.n
 
+        # Define network for Atari games
+        if spec.rb_address is None:
+            atari_agent = models.AtariAgent(
+                env_name=spec.env, training=spec.training)
+
+        # Define network for Atari games + Restraining bolt
+        else:
+            atari_agent = models.RestrainedAtariAgent(
+                env_name=spec.env, training=spec.training,
+                frames_sender=streaming.AtariFramesSender(spec.env),
+                rb_receiver=streaming.StateRewardReceiver(spec.rb_address),
+            )
+
         # Samples are extracted from memory, not observed directly
         memory = SequentialMemory(
-            limit=spec.memory_limit, window_length=AtariAgent.window_length)
+            limit=spec.memory_limit, window_length=atari_agent.window_length)
 
         # Linear dicrease of greedy actions
         train_policy = LinearAnnealedPolicy(
@@ -100,12 +104,9 @@ class Trainer:
         # Test policy: constant eps or per-episode
         test_policy = (
             EpsGreedyQPolicy(eps=spec.random_test) if not spec.random_epsilon
-            else EpisodeRandomEpsPolicy(min_eps=0.0, max_eps=spec.random_test)
+            else models.EpisodeRandomEpsPolicy(
+                min_eps=0.0, max_eps=spec.random_test)
         )
-
-        # Define network for Atari games
-        atari_agent = AtariAgent(
-            env_name=spec.env, training=spec.training)
 
         # RL agent
         dqn = DQNAgent(
