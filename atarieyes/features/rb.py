@@ -5,7 +5,7 @@ from flloat.ldlf import LDLfFormula
 from pythomata.impl.symbolic import SymbolicAutomaton
 from pythomata.simulator import AutomatonSimulator
 
-from atarieyes.tools import ArgumentSaver, prepare_directories
+from atarieyes import tools
 from atarieyes.features import selector
 
 
@@ -21,7 +21,7 @@ class Runner:
         """
 
         # Load the arguments
-        loaded_args = ArgumentSaver.load(args.args_file)
+        loaded_args = tools.ArgumentSaver.load(args.args_file)
 
         # Check that this was a trained features extractor
         if loaded_args.what != "features" or loaded_args.op != "train":
@@ -30,10 +30,14 @@ class Runner:
                 "`atarieyes features train ...` command")
 
         # Dirs
-        model_path, log_path = prepare_directories(
+        model_path, log_path = tools.prepare_directories(
             "features", loaded_args.env, no_create=True)
 
-        # TODO
+        # TODO: build the model
+
+        # TODO: restore weights
+
+        # TODO: rb
     
     def run(self):
         # TODO

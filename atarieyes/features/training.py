@@ -39,31 +39,9 @@ class Trainer:
         self.env = gym.make(args.env)
         self.frame_shape = self.env.observation_space.shape
 
-        # Model hyper-parameters
-        encoding_spec = [dict(
-                n_hidden=units, batch_size=args.batch_size,
-                l2_const=args.l2_const, sparsity_const=args.sparsity_const,
-                sparsity_target=args.sparsity_target,
-            ) for units in args.network_size
-        ]
-        genetic_spec = dict(
-            n_individuals=args.population_size,
-            mutation_p=args.mutation_p,
-            crossover_p=args.crossover_p,
-            fitness_range=args.fitness_range,
-            n_episodes=args.fitness_episodes,
-        )
-
         # Model
-        self.model = models.Fluents(
-            env_name=args.env,
-            dbn_spec=encoding_spec,
-            ga_spec=genetic_spec,
-            training_layer=int(args.train_region_layer[1]),
-            training_region=args.train_region_layer[0],
-            receiver_gen=lambda: atari_frames_generator(args.env, args.stream),
-            logdir=log_path,
-        )
+        self.model = self.build_model(
+            tools.Namespace(args), log_path=log_path)
 
         # Define the dataset and initialize it (if not custom training loop)
         dataset = make_dataset(
@@ -87,6 +65,43 @@ class Trainer:
         # Save on exit
         tools.QuitWithResources.add(
             "last_save", lambda: self.saver.save(self._step))
+
+    @staticmethod
+    def build_model(spec, log_path):
+        """Instantiates a model from a specification.
+
+        :param spec: a Namespace specification arguments (see --help).
+        :param log_path: directory of logs.
+        :return: an instance of features.models.Model
+        """
+
+        # Model hyper-parameters
+        encoding_spec = [dict(
+            n_hidden=units, batch_size=spec.batch_size,
+            l2_const=spec.l2_const, sparsity_const=spec.sparsity_const,
+            sparsity_target=spec.sparsity_target,
+            ) for units in spec.network_size
+        ]
+        genetic_spec = dict(
+            n_individuals=spec.population_size,
+            mutation_p=spec.mutation_p,
+            crossover_p=spec.crossover_p,
+            fitness_range=spec.fitness_range,
+            n_episodes=spec.fitness_episodes,
+        )
+
+        # Model
+        model = models.Fluents(
+            env_name=spec.env,
+            dbn_spec=encoding_spec,
+            ga_spec=genetic_spec,
+            training_layer=int(spec.train_region_layer[1]),
+            training_region=spec.train_region_layer[0],
+            receiver_gen=lambda: atari_frames_generator(spec.env, spec.stream),
+            logdir=log_path,
+        )
+
+        return model
 
     def train(self):
         """Train."""
