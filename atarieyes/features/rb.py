@@ -52,7 +52,8 @@ class Runner:
 
     def run(self):
         # TODO
-        import pdb; pdb.set_trace()
+        import pdb
+        pdb.set_trace()
         pass
 
 
@@ -66,12 +67,15 @@ class RestrainingBolt:
     The non-Markovian MDP is a classic MDP + a temporal goal.
     """
 
-    def __init__(self, env_name, fluents, logdir=None, verbose=True):
+    def __init__(self, env_name, fluents, reward, logdir=None, verbose=True):
         """Initialize.
 
         :param env_name: a gym atari environment name.
         :param fluents: the list of propositional atoms that are known at
             each step.
+        :param reward: (float) this reward is returned when the execution
+            reaches a final state (at the first instant an execution satisfies
+            the restraining specification).
         :param logdir: if provided, the automaton just parsed is saved here.
         :param verbose: verbose flag (automaton conversion may take a while).
         """
@@ -95,7 +99,7 @@ class RestrainingBolt:
 
         # Conversion (slow op)
         automaton = formula.to_automaton()  # type: SymbolicAutomaton
-        automaton = automaton.determinize()
+        automaton = automaton.determinize().complete()
         if verbose:
             print("> Parsed")
 
@@ -109,12 +113,14 @@ class RestrainingBolt:
         simulator = AutomatonSimulator(automaton)
 
         # Store
-        self._env_name = env_name
-        self._fluents = fluents
+        self.env_name = env_name
+        self.fluents = fluents
         self._str = restraining_spec
         self._formula = formula
         self._automaton = automaton
         self._simulator = simulator
+        self._reward = reward
+        self._last_state = None
 
     def step(self, observation):
         """One step of the Restraining Bolt.
@@ -123,9 +129,34 @@ class RestrainingBolt:
         At each step, given the current observation, it computes the next
         state and reward that should be passed to the agent.
 
-        :param observation: a dict of {fluent_names: bools}
+        :param observation: a numpy array of boolean predictions for all
+            self._fluents, or None at the end of each episode.
         :return: a tuple of state (int) and reward (float)
         """
 
-        # TODO: send or return
-        # TODO: reset?
+        # Initialize for a new episode
+        if observation is None:
+            states = self._simulator.reset()
+            assert len(states) == 1
+            self._last_state = None
+            return set(states).pop(), 0.0
+
+        # Transform to Propositional interpretation
+        interpretation = {
+            fluent: bool(val == 1)
+            for fluent, val in zip(self.fluents, observation)
+        }
+
+        # Move the automaton
+        states = self._simulator.step(interpretation)
+        assert len(states) == 1
+        state = set(states).pop()
+
+        # Reward
+        if state != self._last_state and self._simulator.is_true():
+            reward = self._reward
+        else:
+            reward = 0.0
+        self._last_state = state
+
+        return state, reward
