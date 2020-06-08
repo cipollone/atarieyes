@@ -7,6 +7,7 @@ from pythomata.simulator import AutomatonSimulator
 
 from atarieyes import tools
 from atarieyes.features import selector
+from atarieyes.features import training
 
 
 class Runner:
@@ -33,14 +34,25 @@ class Runner:
         model_path, log_path = tools.prepare_directories(
             "features", loaded_args.env, no_create=True)
 
-        # TODO: build the model
+        # Model (don't train this time)
+        loaded_args.train_region_layer = None
+        self.model = training.Trainer.build_model(
+            loaded_args, log_path=log_path)
 
-        # TODO: restore weights
+        # Restore weights
+        self.saver = training.CheckpointSaver(self.model.model, model_path)
+        self.saver.load(args.initialize)
 
-        # TODO: rb
-    
+        # Restraining Bolt
+        self.rb = RestrainingBolt(
+            env_name=loaded_args.env,
+            fluents=self.model.fluents,
+            logdir=log_path,
+        )
+
     def run(self):
         # TODO
+        import pdb; pdb.set_trace()
         pass
 
 

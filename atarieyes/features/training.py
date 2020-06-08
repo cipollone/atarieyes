@@ -2,7 +2,6 @@
 
 import os
 import json
-import itertools
 import gym
 import numpy as np
 import tensorflow as tf
@@ -75,6 +74,13 @@ class Trainer:
         :return: an instance of features.models.Model
         """
 
+        # Part of the model to train
+        if spec.train_region_layer is not None:
+            train_layer = int(spec.train_region_layer[1])
+            train_region = spec.train_region_layer[0]
+        else:
+            train_layer = train_region = None
+
         # Model hyper-parameters
         encoding_spec = [dict(
             n_hidden=units, batch_size=spec.batch_size,
@@ -95,8 +101,8 @@ class Trainer:
             env_name=spec.env,
             dbn_spec=encoding_spec,
             ga_spec=genetic_spec,
-            training_layer=int(spec.train_region_layer[1]),
-            training_region=spec.train_region_layer[0],
+            training_layer=train_layer,
+            training_region=train_region,
             receiver_gen=lambda: atari_frames_generator(spec.env, spec.stream),
             logdir=log_path,
         )

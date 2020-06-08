@@ -337,7 +337,7 @@ class StateRewardSender(Sender):
         :param state: a scalar int
         :param reward: a float reward
         """
-        
+
         # Serialize
         inputs = [state, reward]
         msg = [

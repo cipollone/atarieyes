@@ -841,6 +841,7 @@ class Fluents(Model):
             "n_individuals", "mutation_p", "crossover_p", "fitness_range" and
             "n_episodes". See BooleanFunctionsArrayGA parameters.
         :param training_layer: index of the region layer to train.
+            Can be None.
         :param training_region: name of the region to train.
             This is required if training_layer < last (== len(dbn_spec)).
         :param receiver_gen: a callable that returns a generator of data from
@@ -855,7 +856,10 @@ class Fluents(Model):
         self._training_layer = training_layer
         self._training_region = training_region
         self._training_last = (
-            training_layer == -1 or training_layer >= len(self._dbn_spec))
+            self._training_layer is not None and (
+                self._training_layer == -1 or
+                self._training_layer >= len(self._dbn_spec)
+            ))
         self._frame_shape = gym.make(env_name).observation_space.shape
 
         # Read all regions
@@ -863,7 +867,8 @@ class Fluents(Model):
         regions_data = env_data["regions"]
         self._region_names = list(regions_data.keys())
 
-        if not self._training_last and (
+        # Check valid region
+        if self._training_layer is not None and not self._training_last and (
             self._training_region not in self._region_names
         ):
             raise ValueError(
@@ -1011,6 +1016,10 @@ class Fluents(Model):
         if self._training_last and inputs.shape[0] != 1:
             raise ValueError(
                 "When training the last layer, batch size must be 1")
+        if self._training_layer is None:
+            raise ValueError(
+                "Region/layer to train was not specified. "
+                "You can only predict, with this instance.")
 
         # The first output is a prediction
         encodings = self._encoding_predict(inputs)
