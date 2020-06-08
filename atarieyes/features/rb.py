@@ -1,5 +1,6 @@
 """Restraining Bolt module."""
 
+import itertools
 import numpy as np
 from flloat.parser.ldlf import LDLfParser
 from flloat.ldlf import LDLfFormula
@@ -52,16 +53,26 @@ class Runner:
             logdir=log_path,
         )
 
+        # States are mapped to contiguous indices (0 based)
+        self.states_map = {
+            state: i for state, i in zip(
+                sorted(self.rb._automaton.states), itertools.count())
+        }
+
         # I/O connection with the agent 
+        self.rb_sender = streaming.StateRewardSender()
         self.frames_receiver = streaming.AtariFramesReceiver(
             loaded_args.env, args.stream)
-        self.rb_sender = streaming.StateRewardSender()
 
     def run(self):
         """Execute the Restraining Bolt.
 
         This assumes a running instance of an agent.
         """
+
+        # TODO: react to this message. Assert not nan in receiver
+        # Special message: transmit the number of states
+        self.rb_sender.send(len(self.states_map), float("nan"))
 
         # Loop
         while True:
@@ -84,7 +95,7 @@ class Runner:
             state, reward = self.rb.step(predicted)
 
             # Send a feedback to the agent
-            self.rb_sender.send(state, reward)
+            self.rb_sender.send(self.states_map[state], reward)
 
             # End of episode?
             if termination == "last":

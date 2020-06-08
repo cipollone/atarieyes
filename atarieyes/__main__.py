@@ -133,6 +133,10 @@ def main():
         "--target-update", type=int, metavar="STEPS", dest="target_update",
         default=agent_defaults["target_update"], help="Frequency, in steps, "
         "at which the target model is updated (see DDQN)")
+    agent_train.add_argument(
+        "--rb", type=str, metavar="IP", dest="rb_address",
+        help="Apply to this agent a Restraining Bolt that runs at this "
+        "address. The net structure may also change")
 
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")

@@ -11,6 +11,7 @@ from rl.agents.dqn import DQNAgent
 from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.callbacks import Callback, FileLogger
 
+from atarieyes import streaming
 from atarieyes.tools import Namespace, prepare_directories
 from atarieyes.agent.models import AtariAgent, EpisodeRandomEpsPolicy
 
@@ -64,6 +65,15 @@ class Trainer:
         ]
         if args.random_epsilon:
             self.callbacks.append(self.kerasrl_agent.test_policy.callback)
+
+        # Connections with the Restraining Bolt
+        if args.rb_address is not None:
+
+            self.frames_sender = streaming.AtariFramesSender(args.env)
+            self.rb_receiver = streaming.StateRewardReceiver(args.rb_address)
+
+            # TODO: push these inside the processor.
+
 
     @staticmethod
     def build_agent(spec):
