@@ -28,6 +28,7 @@ def main():
         crossover_p=0.02,
         fitness_range=[30, 100],
         fitness_episodes=2,
+        rb_reward=1,
     )
     agent_defaults = dict(
         memory_limit=1000000,
@@ -277,6 +278,14 @@ def main():
     features_rb.add_argument(
         "-i", "--init", dest="initialize", type=str, metavar="FILE.tf",
         required=True, help="Load model weights from checkpoint")
+    features_rb.add_argument(
+        "--stream", type=str, required=True,
+        help="Ip address of an agent. This address is used to receive frames "
+        "from an agent.")
+    features_rb.add_argument(
+        "-r", "--reward", dest="rb_reward", type=float,
+        default=features_defaults["rb_reward"],
+        help="Reward returned by the Bolt at each event")
 
     args = parser.parse_args()
 

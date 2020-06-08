@@ -1,11 +1,12 @@
 """Restraining Bolt module."""
 
+import numpy as np
 from flloat.parser.ldlf import LDLfParser
 from flloat.ldlf import LDLfFormula
 from pythomata.impl.symbolic import SymbolicAutomaton
 from pythomata.simulator import AutomatonSimulator
 
-from atarieyes import tools
+from atarieyes import tools, streaming
 from atarieyes.features import selector
 from atarieyes.features import training
 
@@ -34,27 +35,60 @@ class Runner:
         model_path, log_path = tools.prepare_directories(
             "features", loaded_args.env, no_create=True)
 
-        # Model (don't train this time)
+        # Model of fluents (don't train this time)
         loaded_args.train_region_layer = None
-        self.model = training.Trainer.build_model(
+        self.fluents = training.Trainer.build_model(
             loaded_args, log_path=log_path)
 
         # Restore weights
-        self.saver = training.CheckpointSaver(self.model.model, model_path)
+        self.saver = training.CheckpointSaver(self.fluents.model, model_path)
         self.saver.load(args.initialize)
 
         # Restraining Bolt
         self.rb = RestrainingBolt(
             env_name=loaded_args.env,
-            fluents=self.model.fluents,
+            fluents=self.fluents.fluents,
+            reward=args.rb_reward,
             logdir=log_path,
         )
 
+        # I/O connection with the agent 
+        self.frames_receiver = streaming.AtariFramesReceiver(
+            loaded_args.env, args.stream)
+        self.rb_sender = streaming.StateRewardSender()
+
     def run(self):
-        # TODO
-        import pdb
-        pdb.set_trace()
-        pass
+        """Execute the Restraining Bolt.
+
+        This assumes a running instance of an agent.
+        """
+
+        # Loop
+        while True:
+
+            # Receive an observation
+            frame, termination = self.frames_receiver.receive(wait=True)
+
+            # End of episode?
+            if termination == "repeated_last":
+                self.rb.step(None)
+                continue
+
+            # Make a prediction of all fluents
+            inputs = np.expand_dims(frame, 0)
+            predicted = self.fluents.predict(inputs)
+            assert predicted.shape[0] == 1
+            predicted = predicted[0]
+
+            # Update
+            state, reward = self.rb.step(predicted)
+
+            # Send a feedback to the agent
+            self.rb_sender.send(state, reward)
+
+            # End of episode?
+            if termination == "last":
+                self.rb.step(None)
 
 
 class RestrainingBolt:
