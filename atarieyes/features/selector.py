@@ -44,6 +44,7 @@ I keep them as a list here just because it might be easier to read them
 "restraining_bolt" is a list of temporal LDLf expressions on fluents, just like
 contraints. Their purpose is to specify agent behaviours to be rewarded.
 This field is not needed for the pure features extraction.
+See features.rb.RestrainingBolt docstring for more help about this field.
 
 
 The selector tool of this module allows to write all fields except "fluents",

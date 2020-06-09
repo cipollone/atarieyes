@@ -63,7 +63,7 @@ class Player:
         self.kerasrl_agent = Trainer.build_agent(
             Namespace(
                 agent_args, training=False, random_test=args.random_test,
-                random_epsilon=args.random_epsilon, rb_address=None,
+                random_epsilon=args.random_epsilon,
             )
         )
 

@@ -108,6 +108,18 @@ class RestrainingBolt:
     rewards and observations. It allows to transform some non-Markovian MDP to
     a Markovian one, thanks to the additional information.
 
+    A reward is given when each prefix of the execution satisfies the
+    restraining specification. This allows to pass multiple rewards to the
+    agent during the execution.  The actual restraining specification is the
+    conjunction of "restraining_bolt" and "constraints" fields. This usually
+    eliminates many impossible trajectories and simplifies "restraining_bolt"
+    formula.
+
+    NOTE: a more correct way to specify to desired behaviours would be just
+    to state the whole trace in "restraining_bolt", not select its prefixes
+    (which is strange). However, I'm not applying any reward shaping,
+    so I'll refer to prefixes to manually provide rewards.
+
     The non-Markovian MDP is a classic MDP + a temporal goal.
     """
 
@@ -128,7 +140,7 @@ class RestrainingBolt:
         if verbose:
             print("> Parsing", env_name, "restraining specification")
         data = selector.read_back(env_name)
-        json_rb = data["restraining_bolt"]
+        json_rb = data["restraining_bolt"] + data["constraints"]
 
         # Parsing
         restraining_spec = " & ".join(json_rb)
