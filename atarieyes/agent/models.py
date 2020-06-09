@@ -11,15 +11,14 @@ Keras-rl mostly relies on numpy instead of tensorflow; I won't change this.
 import numpy as np
 from PIL import Image
 import gym
+import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Flatten, Permute
 from rl.core import Processor
 from rl.policy import Policy
 from rl.callbacks import Callback
 
 from atarieyes.tools import ABCMeta2, AbstractAttribute
-from atarieyes.layers import CropToEnv, ConvBlock
+from atarieyes import layers
 
 
 class QAgentDef(metaclass=ABCMeta2):
@@ -45,7 +44,7 @@ class AtariAgent(QAgentDef):
 
     # Additional layers needed for restoring
     custom_layers = dict(
-        ConvBlock=ConvBlock,
+        ConvBlock=layers.ConvBlock,
         VarianceScaling=keras.initializers.VarianceScaling,  # probable tf bug
     )
 
@@ -77,20 +76,20 @@ class AtariAgent(QAgentDef):
         input_shape = (self.window_length,) + self.resize_shape
 
         # Define
-        model = Sequential([
-            Permute((2, 3, 1), input_shape=input_shape),  # window -> channels
-            ConvBlock(
+        model = keras.Sequential([
+            keras.layers.Permute((2, 3, 1), input_shape=input_shape),  # window -> channels
+            layers.ConvBlock(
                 filters=32, kernel_size=8, strides=4, padding="valid",
                 activation="relu"),
-            ConvBlock(
+            layers.ConvBlock(
                 filters=64, kernel_size=4, strides=2, padding="valid",
                 activation="relu"),
-            ConvBlock(
+            layers.ConvBlock(
                 filters=64, kernel_size=3, strides=1, padding="valid",
                 activation="relu"),
-            Flatten(),
-            Dense(512, activation="relu"),
-            Dense(self.n_actions),
+            keras.layers.Flatten(),
+            keras.layers.Dense(512, activation="relu"),
+            keras.layers.Dense(self.n_actions),
         ], name="Agent_net")
         model.summary()
 
@@ -118,7 +117,7 @@ class AtariAgent(QAgentDef):
             self._life_lost = False
 
             self._resize_shape = resize_shape
-            self._cropper = CropToEnv(env_name)
+            self._cropper = layers.CropToEnv(env_name)
 
         def process_step(self, observation, reward, done, info):
             """Processes an entire step.
@@ -213,6 +212,10 @@ class AtariAgent(QAgentDef):
 class RestrainedAtariAgent(AtariAgent):
     """Atari agent + Restraining Bolt."""
 
+    # Define custom layer
+    GatherNdLayer = layers.make_layer("Gather_nd", tf.gather_nd)
+    AtariAgent.custom_layers["Gather_nd"] = GatherNdLayer
+
     def __init__(self, env_name, training, frames_sender, rb_receiver):
         """Initialize.
 
@@ -229,7 +232,7 @@ class RestrainedAtariAgent(AtariAgent):
         # Number of states of the RestrainingBolt
         print("> Waiting init message from a connected RB")
         n_states, nan = rb_receiver.receive()
-        n_states = int(n_states)
+        self._n_states = int(n_states)
         if not np.isnan(nan):
             raise ValueError(
                 "Expected NaN for this first message. Bad synchronization "
@@ -244,7 +247,51 @@ class RestrainedAtariAgent(AtariAgent):
             frames_sender=frames_sender,
             rb_receiver=rb_receiver,
         )
-        # TODO: build custom model
+
+    def _build_model(self):
+        """Define the Q-network of the agent.
+
+        The inputs of the model are a batch of groups of frames, and a batch
+        of RB states.
+
+        :return: a keras model
+        """
+        
+        # Inputs
+        frames_input = keras.Input(
+            shape=(self.window_length,) + self.resize_shape,
+            dtype=tf.float32, name="input_frames")
+        states_input = keras.Input(
+            shape=[], dtype=tf.int32, name="input_states")
+        
+        # Encoding
+        x = frames_input
+        x = keras.layers.Permute((2, 3, 1))(x)  # window -> channels
+        x = layers.ConvBlock(
+            filters=32, kernel_size=8, strides=4, padding="valid",
+            activation="relu")(x)
+        x = layers.ConvBlock(
+            filters=64, kernel_size=4, strides=2, padding="valid",
+            activation="relu")(x)
+        x = layers.ConvBlock(
+            filters=64, kernel_size=3, strides=1, padding="valid",
+            activation="relu")(x)
+        x = keras.layers.Flatten()(x)
+        x = keras.layers.Dense(512, activation="relu")(x)
+
+        # Select a portion of the net depending on the state
+        x = keras.layers.Dense(self._n_states * self.n_actions)(x)
+        x = keras.layers.Reshape((self._n_states, self.n_actions))(x)
+        indices = keras.layers.Reshape((1,))(states_input)
+        x = self.GatherNdLayer()(x, indices=indices, batch_dims=1)
+
+        # Model
+        model = keras.Model(
+            inputs=[frames_input, states_input],
+            outputs=x, name="RBAgent_net")
+        model.summary()
+
+        return model
 
     class Processor(AtariAgent.Processor):
         """This processor inserts the Restraining Bolt into the loop."""
@@ -321,8 +368,7 @@ class RestrainedAtariAgent(AtariAgent):
             states = batch[:, 0, 1]
             states = np.stack(states)
 
-            # TODO: also return states when the model is ready
-            return frames
+            return [frames, states]
 
 
 class EpisodeRandomEpsPolicy(Policy):
