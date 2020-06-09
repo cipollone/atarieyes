@@ -34,6 +34,8 @@
 		"[true*; rope0_at]!start_at"
 	],
 	"restraining_bolt": [
-		"[true*](last -> (start_at | rope0_at))"
+		"[true*](last -> (start_at | rope0_at))",
+		"!<true*; start_at; (!start_at & !rope0_at); (!rope0_at)*>(start_at & last)",
+		"!<true*; rope0_at; (!start_at & !rope0_at); (!start_at)*>(rope0_at & last)"
 	]
 }
