@@ -66,6 +66,9 @@ class Trainer:
         if args.random_epsilon:
             self.callbacks.append(self.kerasrl_agent.test_policy.callback)
 
+        # Save on exit
+        tools.QuitWithResources.add("last_save", lambda: self.saver.save())
+
     @staticmethod
     def build_agent(spec):
         """Defines a Keras-rl agent, ready for training.
