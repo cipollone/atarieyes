@@ -48,11 +48,12 @@ class AtariAgent(QAgentDef):
         VarianceScaling=keras.initializers.VarianceScaling,  # probable tf bug
     )
 
-    def __init__(self, env_name, training):
+    def __init__(self, env_name, training, one_life):
         """Initialize.
 
         :param env_name: name of an Atari gym environment.
         :param training: boolean training flag.
+        :param one_life: the agent has one life only.
         """
 
         # Init
@@ -64,7 +65,8 @@ class AtariAgent(QAgentDef):
         self.processor = self.Processor(
             env_name=env_name,
             resize_shape=self.resize_shape,
-            one_life=True if training else False)  # for clarity
+            one_life=one_life and training,
+        )
 
     def _build_model(self):
         """Define the Q-network of the agent.
@@ -134,18 +136,18 @@ class AtariAgent(QAgentDef):
             :return: processed (observation, reward, done, reward)
             """
 
-            # Standard processing
-            observation = self.process_observation(observation)
-            reward = self.process_reward(reward)
-            done = self.process_done(done)
-            info = self.process_info(info)
-
             # Early termination
             if self._one_life:
                 if not self._lives:
                     self._lives = info["ale.lives"]
                 self._life_lost = (info["ale.lives"] < self._lives)
                 self._lives = info["ale.lives"]
+
+            # Standard processing
+            observation = self.process_observation(observation)
+            reward = self.process_reward(reward)
+            done = self.process_done(done)
+            info = self.process_info(info)
 
             return observation, reward, done, info
 
@@ -176,7 +178,15 @@ class AtariAgent(QAgentDef):
             return np.clip(reward, -1., 1.)
 
         def process_done(self, done):
-            """Process "done" boolean flag; do nothing."""
+            """Process "done" boolean flag.
+
+            Early termination of the episode when a life is lost.
+            """
+
+            # Set terminal state when a life is lost
+            #   Unless 0 lives, because the env may send it immediately after.
+            if self._one_life and self._life_lost and self._lives > 0:
+                done = True
 
             return done
 
@@ -201,11 +211,7 @@ class AtariAgent(QAgentDef):
             :param terminal: terminal state flag
             """
 
-            # Remember a state as terminal when a life is lost.
-            #   Unless 0 lives, because the env may send it immediately after.
-            if self._one_life and self._life_lost and self._lives > 0:
-                terminal = True
-
+            # Do nothing. Leaving this method just as reference
             return observation, action, reward, terminal
 
 
@@ -216,11 +222,14 @@ class RestrainedAtariAgent(AtariAgent):
     GatherNdLayer = layers.make_layer("Gather_nd", tf.gather_nd)
     AtariAgent.custom_layers["Gather_nd"] = GatherNdLayer
 
-    def __init__(self, env_name, training, frames_sender, rb_receiver):
+    def __init__(
+        self, env_name, training, one_life, frames_sender, rb_receiver,
+    ):
         """Initialize.
 
         :param env_name: name of an Atari gym environment.
         :param training: boolean training flag.
+        :param one_life: the agent has one life only.
         :param frames_sender: an instance of AtariFramesSender
         :param rb_receiver: an instance of StateRewardReceiver
         """
@@ -243,7 +252,7 @@ class RestrainedAtariAgent(AtariAgent):
         self.processor = self.Processor(
             env_name=env_name,
             resize_shape=self.resize_shape,
-            one_life=True if training else False,  # for clarity
+            one_life=one_life and training,
             frames_sender=frames_sender,
             rb_receiver=rb_receiver,
         )
@@ -345,6 +354,9 @@ class RestrainedAtariAgent(AtariAgent):
 
         def process_done(self, done):
             """Notify the end of an episode."""
+
+            # Standard processor
+            done = AtariAgent.Processor.process_done(self, done)
 
             # Notify, if end of an episode
             if done:

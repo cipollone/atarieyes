@@ -27,6 +27,7 @@ class Trainer:
         # Params
         self.resuming = args.cont is not None
         self.initialize_from = args.cont
+        self._log_interval = args.log_frequency
 
         # Dirs
         model_path, log_path = tools.prepare_directories(
@@ -83,12 +84,17 @@ class Trainer:
         # Define network for Atari games
         if spec.rb_address is None:
             atari_agent = models.AtariAgent(
-                env_name=spec.env, training=spec.training)
+                env_name=spec.env,
+                training=spec.training,
+                one_life=not spec.no_onelife,
+            )
 
         # Define network for Atari games + Restraining bolt
         else:
             atari_agent = models.RestrainedAtariAgent(
-                env_name=spec.env, training=spec.training,
+                env_name=spec.env,
+                training=spec.training,
+                one_life=not spec.no_onelife,
                 frames_sender=streaming.AtariFramesSender(spec.env),
                 rb_receiver=streaming.StateRewardReceiver(spec.rb_address),
             )
@@ -146,8 +152,13 @@ class Trainer:
 
         # Go
         self.kerasrl_agent.fit(
-            self.env, callbacks=self.callbacks, nb_steps=10000000,
-            log_interval=10000, init_step=init_step, init_episode=init_episode)
+            self.env,
+            callbacks=self.callbacks,
+            nb_steps=10000000,
+            log_interval=self._log_interval,
+            init_step=init_step,
+            init_episode=init_episode,
+        )
 
         # Save final weights
         self.saver.save()

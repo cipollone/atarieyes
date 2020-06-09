@@ -31,6 +31,8 @@ def main():
         rb_reward=1,
     )
     agent_defaults = dict(
+        log_frequency=5000,
+        target_update=5000,
         memory_limit=1000000,
         learning_rate=0.00025,
         gamma=0.99,
@@ -40,9 +42,8 @@ def main():
         random_min=0.1,
         random_test=0.03,
         steps_warmup=50000,
-        save_frequency=200000,
-        random_decay_steps=1000000,
-        target_update=10000,
+        save_frequency=100000,
+        random_decay_steps=500000,
     )
 
     parser = argparse.ArgumentParser(
@@ -79,6 +80,9 @@ def main():
     agent_train.add_argument(
         "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of a Gym environment")
+    agent_train.add_argument(
+        "-l", "--logs", type=int, default=agent_defaults["log_frequency"],
+        dest="log_frequency", help="Number of steps in each interval")
     agent_train.add_argument(
         "-r", "--rate", type=float, default=agent_defaults["learning_rate"],
         dest="learning_rate", help="Learning rate")
@@ -137,6 +141,10 @@ def main():
         "--rb", type=str, metavar="IP", dest="rb_address",
         help="Apply to this agent a Restraining Bolt that runs at this "
         "address. The net structure may also change")
+    agent_train.add_argument(
+        "--no-onelife", action="store_true", dest="no_onelife",
+        help="The agent has multiple lives available. It may ecourage "
+        "exploration but slow down training")
 
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
