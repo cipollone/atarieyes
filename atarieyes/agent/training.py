@@ -28,6 +28,7 @@ class Trainer:
         self.resuming = args.cont is not None
         self.initialize_from = args.cont
         self._log_interval = args.log_frequency
+        self._max_episode_steps = args.max_episode_steps
 
         # Dirs
         model_path, log_path = tools.prepare_directories(
@@ -158,6 +159,7 @@ class Trainer:
             log_interval=self._log_interval,
             init_step=init_step,
             init_episode=init_episode,
+            nb_max_episode_steps=self._max_episode_steps,
         )
 
         # Save final weights

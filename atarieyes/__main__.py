@@ -41,9 +41,10 @@ def main():
         random_max=1.0,
         random_min=0.1,
         random_test=0.03,
-        steps_warmup=50000,
+        steps_warmup=20000,
         save_frequency=100000,
         random_decay_steps=500000,
+        max_episode_steps=3000,
     )
 
     parser = argparse.ArgumentParser(
@@ -145,6 +146,10 @@ def main():
         "--no-onelife", action="store_true", dest="no_onelife",
         help="The agent has multiple lives available. It may ecourage "
         "exploration but slow down training")
+    agent_train.add_argument(
+        "-M", "--max-episode-steps", type=int, metavar="MAX",
+        dest="max_episode_steps", default=agent_defaults["max_episode_steps"],
+        help="Maximum number of steps in each episode")
 
     # Agent play op
     agent_play = agent_op.add_parser("play", help="Show how the agent plays")
