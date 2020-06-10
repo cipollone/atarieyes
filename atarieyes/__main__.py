@@ -165,6 +165,9 @@ def main():
         default="render", help="Choose how to follow the game: "
         "render on screen, streaming frames, both.")
     agent_play.add_argument(
+        "-p", "--port", type=int,
+        help="If watching through stream, overrides the default port")
+    agent_play.add_argument(
         "--skip", type=int, metavar="N_FRAMES", help="Stream frames skipping "
         "a random number of frames (N_FRAMES at most).")
     agent_play.add_argument(
@@ -189,6 +192,9 @@ def main():
     agent_watch.add_argument(
         "-e", "--env", type=_gym_environment_arg, required=True,
         help="Identifier of the Gym environmen the agent is being trained on.")
+    agent_watch.add_argument(
+        "-p", "--port", type=int, help="Overrides the default port")
+
 
     # Features
     features_parser = what_parsers.add_parser(
@@ -321,7 +327,7 @@ def main():
         elif args.op == "watch":
             import atarieyes.streaming as streaming
             streaming.display_atari_frames(
-                env_name=args.env, ip=args.stream)
+                env_name=args.env, ip=args.stream, port=args.port)
     elif args.what == "features":
         if args.op == "train":
             import atarieyes.features.training as features_training

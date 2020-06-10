@@ -80,7 +80,7 @@ class Player:
             self.callbacks.append(self.kerasrl_agent.test_policy.callback)
         if self.streaming:
             self.callbacks.append(
-                Streamer(self.env_name, skip_frames=args.skip))
+                Streamer(self.env_name, skip_frames=args.skip, port=args.port))
 
     def play(self):
         """Play."""
@@ -95,11 +95,12 @@ class Player:
 class Streamer(Callback):
     """Send frames through a connection."""
 
-    def __init__(self, env_name, skip_frames=None):
+    def __init__(self, env_name, skip_frames=None, port=None):
         """Initialize.
 
         :param env_name: name of an Atari environment.
         :param skip_frames: skip a random number of frames in [0, skip_frames].
+        :param port: if given, overrides the default port.
         """
 
         # Super
@@ -110,7 +111,7 @@ class Streamer(Callback):
             raise ValueError("skip_frames must be positive")
 
         # Init
-        self.sender = AtariFramesSender(env_name)
+        self.sender = AtariFramesSender(env_name, port=port)
         self.skip_frames = skip_frames
         self._skips_left = 0
         self._last_frame = None
