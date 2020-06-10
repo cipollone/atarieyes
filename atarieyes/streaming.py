@@ -41,7 +41,9 @@ class Sender:
             send() waits if there are too many messages still to be sent.
         """
 
+        # Store
         self.MSG_LENGTH = msg_length
+        self._port = port
 
         # Create connection
         self.server = Sender.OneRequestTCPServer(
@@ -58,7 +60,7 @@ class Sender:
         def close():
             self.server.server_close()
             print("\nSender closed")
-        QuitWithResources.add("sender", close)
+        QuitWithResources.add("Sender:" + str(self._port), close)
 
         thread = threading.Thread(target=self.server.serve_forever)
         thread.daemon = True
@@ -210,7 +212,7 @@ class AtariFramesSender(Sender):
     """
 
     # Port for this stream
-    port = 30013
+    port = 60013
 
     # Message protocol
     _termination_flags = {
@@ -219,10 +221,11 @@ class AtariFramesSender(Sender):
         "repeated_last": b'\x02',
     }
 
-    def __init__(self, env_name):
+    def __init__(self, env_name, port=None):
         """Initialize.
 
         :param env_name: a gym environment name
+        :param port: if given, overrides the default port
         """
 
         # Discover frame shape
@@ -232,7 +235,10 @@ class AtariFramesSender(Sender):
         size = len(frame.tobytes()) + 1
 
         # Super
-        Sender.__init__(self, msg_length=size, port=self.port, wait=True)
+        Sender.__init__(
+            self, msg_length=size, wait=True,
+            port=self.port if not port else port,
+        )
 
         # Start
         self.start()
@@ -255,11 +261,12 @@ class AtariFramesSender(Sender):
 class AtariFramesReceiver(Receiver):
     """Receiver class for frames of Atari games."""
 
-    def __init__(self, env_name, ip):
+    def __init__(self, env_name, ip, port=None):
         """Initialize.
 
         :param env_name: a gym environment name
         :param ip: source ip address (str)
+        :param port: if given, overrides the default port
         """
 
         # Discover frame shape
@@ -276,8 +283,8 @@ class AtariFramesReceiver(Receiver):
 
         # Super
         Receiver.__init__(
-            self, msg_length=size,
-            ip=ip, port=AtariFramesSender.port, wait=True,
+            self, msg_length=size, ip=ip, wait=True,
+            port=AtariFramesSender.port if not port else port,
         )
 
         # Start
@@ -317,7 +324,7 @@ class StateRewardSender(Sender):
     """
 
     # Port for this stream
-    port = 30014
+    port = 60014
 
     # Store static information
     _format = [
@@ -406,7 +413,7 @@ class StateRewardReceiver(Receiver):
         return data
 
 
-def display_atari_frames(env_name, ip):
+def display_atari_frames(env_name, ip, port=None):
     """Display the frames of an Atari games in a window.
 
     The frames should be produced by AtariFramesSender.
@@ -414,10 +421,11 @@ def display_atari_frames(env_name, ip):
 
     :param env_name: a gym environment name
     :param ip: source ip address (str)
+    :param port: if give, overrides the default port
     """
 
     # Receiver
-    receiver = AtariFramesReceiver(env_name, ip)
+    receiver = AtariFramesReceiver(env_name, ip, port=port)
     name = env_name + " - " + ip
 
     # Window

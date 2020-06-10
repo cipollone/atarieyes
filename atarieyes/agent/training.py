@@ -11,8 +11,8 @@ from rl.agents.dqn import DQNAgent
 from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.callbacks import Callback, FileLogger
 
-from atarieyes.tools import Namespace, prepare_directories
-from atarieyes.agent.models import AtariAgent, EpisodeRandomEpsPolicy
+from atarieyes import streaming, tools
+from atarieyes.agent import models
 
 
 class Trainer:
@@ -27,9 +27,11 @@ class Trainer:
         # Params
         self.resuming = args.cont is not None
         self.initialize_from = args.cont
+        self._log_interval = args.log_frequency
+        self._max_episode_steps = args.max_episode_steps
 
         # Dirs
-        model_path, log_path = prepare_directories(
+        model_path, log_path = tools.prepare_directories(
             "agent", args.env, resuming=self.resuming, args=args)
         log_filename = "log.json"
         self.log_file = os.path.join(log_path, log_filename)
@@ -49,12 +51,14 @@ class Trainer:
             tf.random.set_seed(30013)
 
         # Agent
-        self.kerasrl_agent = self.build_agent(Namespace(args, training=True))
+        self.kerasrl_agent, self.atari_agent = self.build_agent(
+            tools.Namespace(args, training=True))
 
         # Tools
         self.saver = CheckpointSaver(
             agent=self.kerasrl_agent, path=model_path, interval=args.saves)
-        self.logger = TensorboardLogger(logdir=log_path)
+        self.logger = TensorboardLogger(
+            logdir=log_path, agent=self.atari_agent)
 
         # Callbacks
         self.callbacks = [
@@ -64,6 +68,9 @@ class Trainer:
         ]
         if args.random_epsilon:
             self.callbacks.append(self.kerasrl_agent.test_policy.callback)
+
+        # Save on exit
+        tools.QuitWithResources.add("last_save", lambda: self.saver.save())
 
     @staticmethod
     def build_agent(spec):
@@ -76,9 +83,27 @@ class Trainer:
         env = gym.make(spec.env)
         n_actions = env.action_space.n
 
+        # Define network for Atari games
+        if spec.rb_address is None:
+            atari_agent = models.AtariAgent(
+                env_name=spec.env,
+                training=spec.training,
+                one_life=not spec.no_onelife,
+            )
+
+        # Define network for Atari games + Restraining bolt
+        else:
+            atari_agent = models.RestrainedAtariAgent(
+                env_name=spec.env,
+                training=spec.training,
+                one_life=not spec.no_onelife,
+                frames_sender=streaming.AtariFramesSender(spec.env),
+                rb_receiver=streaming.StateRewardReceiver(spec.rb_address),
+            )
+
         # Samples are extracted from memory, not observed directly
         memory = SequentialMemory(
-            limit=spec.memory_limit, window_length=AtariAgent.window_length)
+            limit=spec.memory_limit, window_length=atari_agent.window_length)
 
         # Linear dicrease of greedy actions
         train_policy = LinearAnnealedPolicy(
@@ -90,12 +115,9 @@ class Trainer:
         # Test policy: constant eps or per-episode
         test_policy = (
             EpsGreedyQPolicy(eps=spec.random_test) if not spec.random_epsilon
-            else EpisodeRandomEpsPolicy(min_eps=0.0, max_eps=spec.random_test)
+            else models.EpisodeRandomEpsPolicy(
+                min_eps=0.0, max_eps=spec.random_test)
         )
-
-        # Define network for Atari games
-        atari_agent = AtariAgent(
-            env_name=spec.env, training=spec.training)
 
         # RL agent
         dqn = DQNAgent(
@@ -120,7 +142,7 @@ class Trainer:
             metrics=["mae"]
         )
 
-        return dqn
+        return dqn, atari_agent
 
     def train(self):
         """Train."""
@@ -132,8 +154,14 @@ class Trainer:
 
         # Go
         self.kerasrl_agent.fit(
-            self.env, callbacks=self.callbacks, nb_steps=10000000,
-            log_interval=10000, init_step=init_step, init_episode=init_episode)
+            self.env,
+            callbacks=self.callbacks,
+            nb_steps=10000000,
+            log_interval=self._log_interval,
+            init_step=init_step,
+            init_episode=init_episode,
+            nb_max_episode_steps=self._max_episode_steps,
+        )
 
         # Save final weights
         self.saver.save()
@@ -240,46 +268,34 @@ class CheckpointSaver(Callback):
 class TensorboardLogger(Callback):
     """Log metrics in Tensorboard."""
 
-    def __init__(self, logdir):
+    def __init__(self, logdir, agent):
         """Initialize.
 
         :param logdir: directory of tensorboard logs
+        :param agent: a QAgentDef instance.
         """
 
         # Super
         Callback.__init__(self)
 
-        # Dict {episode: data}
+        # Store
+        self._agent = agent
+
+        # Both are dicts of {episode: data}
         #   where data is a dict of metrics accumulated during an episode
         #   {metric_name: episode_values}
-        self._episode_data = {}
+        self._episode_scalars = {}
+        self._episode_hists = {}
 
-        # These metrics are returned after each training step and episode
-        self._step_metrics = ["action", "reward", "metrics"]
-        self._episode_metrics = ["episode_reward", "nb_episode_steps"]
+        # Metrics returned after step and episode to be visualized as
+        #   scalars or histograms
+        self._kerasrl_step_scalars = ["reward", "metrics"]
+        self._kerasrl_step_hists = ["action"]
+        self._kerasrl_episode_scalars = ["episode_reward", "nb_episode_steps"]
+        self._kerasrl_episode_hists = []
 
         # Tf writer
         self.summary_writer = tf.summary.create_file_writer(logdir)
-
-    @staticmethod
-    def _reduce_step_metrics(name, values):
-        """How to reduce step metrics."""
-
-        if name == "action":
-            return np.bincount(values) / len(values)
-        else:
-            return np.mean(values, axis=0) if values else None
-
-    @staticmethod
-    def _process_step_metrics(metrics):
-        """Post actions."""
-
-        actions = metrics.pop("action")
-        actions = [
-            ("action_" + str(i), actions[i]) for i in range(actions.shape[0])]
-
-        metrics.update(actions)
-        return metrics
 
     def on_train_begin(self, logs={}):
         """Initialization."""
@@ -290,70 +306,105 @@ class TensorboardLogger(Callback):
         """Initialize the episode averages."""
 
         # New accumulators
-        assert episode not in self._episode_data
-        self._episode_data[episode] = {
-            step_metric: [] for step_metric in self._step_metrics}
+        assert episode not in self._episode_scalars and \
+            episode not in self._episode_hists
+        self._episode_scalars[episode] = {
+            name: [] for name in (self._kerasrl_step_scalars + list(
+                self._agent.scalar_step_metrics))}
+        self._episode_hists[episode] = {
+            name: [] for name in (self._kerasrl_step_hists + list(
+                self._agent.hist_step_metrics))}
 
     def on_episode_end(self, episode, logs={}):
         """Compute and log all metrics."""
 
         # Get episode metrics
-        episode_metrics = {name: logs[name] for name in self._episode_metrics}
-
-        # Accumulate step metrics
-        data = self._episode_data[episode]
-        step_metrics = {
-            name: self._reduce_step_metrics(name, data[name])
-            for name in self._step_metrics}
-        step_metrics = self._process_step_metrics(step_metrics)
+        ep_scalars = {
+            name: logs[name] for name in self._kerasrl_episode_scalars}
+        ep_hists = {
+            name: logs[name] for name in self._kerasrl_episode_hists}
 
         # Model metrics
-        model_metrics_values = step_metrics.pop("metrics")
-        model_metrics = ({
+        model_scalars_values = self._episode_scalars[episode].pop("metrics")
+        model_scalars = ({
             name: value for name, value in
-            zip(self._model_metrics, model_metrics_values)}
-                if model_metrics_values is not None else {})
+            zip(self._model_metrics, model_scalars_values)}
+                if model_scalars_values is not None else {})
 
-        # Join all
-        metrics = dict(
-            episode_metrics=episode_metrics,
-            step_metrics=step_metrics,
-            model_metrics=model_metrics,
-        )
+        # Accumulate step scalars
+        reduced_step_scalars = {
+            name: np.mean(self._episode_scalars[episode][name], axis=0)
+            for name in self._episode_scalars[episode]
+        }
+        reduced_step_scalars.update({
+            name: np.mean(model_scalars[name], axis=0)
+            for name in model_scalars
+        })
+
+        # Accumulate step histograms
+        reduced_step_hists = {
+            name: np.array(self._episode_hists[episode][name])
+            for name in self._episode_hists[episode]
+        }
+
+        # Combine step and episode
+        all_scalars = {**ep_scalars, **reduced_step_scalars}
+        all_hists = {**ep_hists, **reduced_step_hists}
+
+        # Log
+        self.save_scalars(episode, all_scalars)
+        self.save_histograms(episode, all_hists)
 
         # Free space
-        self._episode_data.pop(episode)
-
-        # Save
-        self.save_scalars(episode, metrics)
+        self._episode_scalars.pop(episode)
+        self._episode_hists.pop(episode)
 
     def on_step_end(self, step, logs={}):
         """Collect metrics."""
 
         episode = logs["episode"]
 
-        # Do not collect metrics when NaNs
-        #   (this happens at steps with no backward pass)
-        step_metrics = set(self._step_metrics)
+        # Do not collect training metrics when NaNs
+        #   (this happens at steps without a backward pass)
+        kerasrl_step_scalars = set(self._kerasrl_step_scalars)
         if np.isnan(logs["metrics"]).all():
-            step_metrics.remove("metrics")
+            kerasrl_step_scalars.remove("metrics")
 
-        # Collect
-        for step_metric in step_metrics:
-            self._episode_data[episode][step_metric].append(logs[step_metric])
+        # Collect keras-rl metrics
+        for scalar in kerasrl_step_scalars:
+            self._episode_scalars[episode][scalar].append(logs[scalar])
+        for hist in self._kerasrl_step_hists:
+            self._episode_hists[episode][hist].append(logs[hist])
+
+        # Collect custom metrics
+        for scalar, value in self._agent.scalar_step_metrics.items():
+            self._episode_scalars[episode][scalar].append(value)
+        for hist, value in self._agent.hist_step_metrics.items():
+            self._episode_hists[episode][hist].append(value)
 
     def save_scalars(self, step, metrics):
         """Save scalars.
 
         :param step: the step number (used in plot)
-        :param metrics: a dict of {scope: {scalar name: value}}
+        :param metrics: a dict of {name: scalar}
         """
 
         # Save
         with self.summary_writer.as_default():
-            for scope, group in metrics.items():
-                for name, value in group.items():
-                    tf.summary.scalar(scope + "/" + name, value, step=step)
+            for name, value in metrics.items():
+                tf.summary.scalar(name, value, step=step)
+
+    def save_histograms(self, step, tensors):
+        """Visualize tensors as histograms.
+
+        :param step: the step number
+        :param tensors: a dict of {name: tensor}
+        """
+
+        # Save
+        with self.summary_writer.as_default():
+            for name, tensor in tensors.items():
+                tf.summary.histogram(name, tensor, step)
 
     def save_graph(self, model):
         """Saves the graph of the Q network of the agent in Tensorboard.
