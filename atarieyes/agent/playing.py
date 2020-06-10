@@ -60,7 +60,7 @@ class Player:
             tf.random.set_seed(30013)
 
         # Agent
-        self.kerasrl_agent = Trainer.build_agent(
+        self.kerasrl_agent, _ = Trainer.build_agent(
             Namespace(
                 agent_args, training=False, random_test=args.random_test,
                 random_epsilon=args.random_epsilon,

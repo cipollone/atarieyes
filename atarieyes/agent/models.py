@@ -34,6 +34,10 @@ class QAgentDef(metaclass=ABCMeta2):
     # keras-rl Processor
     processor = AbstractAttribute()
 
+    # Dict of custom metrics {name: numpy array}. Updated at each step
+    scalar_step_metrics = AbstractAttribute()
+    hist_step_metrics = AbstractAttribute()
+
 
 class AtariAgent(QAgentDef):
     """Agent definitions for Atari environments."""
@@ -67,6 +71,10 @@ class AtariAgent(QAgentDef):
             resize_shape=self.resize_shape,
             one_life=one_life and training,
         )
+
+        # No custom metrics
+        self.scalar_step_metrics = {}
+        self.hist_step_metrics = {}
 
     def _build_model(self):
         """Define the Q-network of the agent.
@@ -248,6 +256,13 @@ class RestrainedAtariAgent(AtariAgent):
                 "Expected NaN for this first message. Bad synchronization "
                 "in StateReward stream")
 
+        # Custom metrics
+        self.scalar_step_metrics = {}
+        self.hist_step_metrics = {
+            "rb_state": None,
+            "rb_reward": None,
+        }
+
         # Build models
         self.model = self._build_model()
         self.processor = self.Processor(
@@ -256,6 +271,7 @@ class RestrainedAtariAgent(AtariAgent):
             one_life=one_life and training,
             frames_sender=frames_sender,
             rb_receiver=rb_receiver,
+            hist_step_metrics=self.hist_step_metrics,
         )
 
     def _build_model(self):
@@ -306,11 +322,14 @@ class RestrainedAtariAgent(AtariAgent):
     class Processor(AtariAgent.Processor):
         """This processor inserts the Restraining Bolt into the loop."""
 
-        def __init__(self, frames_sender, rb_receiver, **kwargs):
+        def __init__(
+            self, frames_sender, rb_receiver, hist_step_metrics, **kwargs
+        ):
             """Initialize.
 
             :param frames_sender: an instance of AtariFramesSender
             :param rb_receiver: an instance of StateRewardReceiver
+            :param hist_step_metrics: a dict of metrics
             :param kwargs: arguments of the basic processor.
             """
 
@@ -320,6 +339,7 @@ class RestrainedAtariAgent(AtariAgent):
             # Store
             self._frames_sender = frames_sender
             self._rb_receiver = rb_receiver
+            self._hist_step_metrics = hist_step_metrics
             self._rb_reward = None
             self._last_frame = None
 
@@ -339,6 +359,10 @@ class RestrainedAtariAgent(AtariAgent):
 
             # Receive from RB
             state, self._rb_reward = self._rb_receiver.receive()
+
+            # Save for metrics
+            self._hist_step_metrics["rb_state"] = state
+            self._hist_step_metrics["rb_reward"] = self._rb_reward
 
             return processed, state
 
