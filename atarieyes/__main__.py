@@ -303,6 +303,10 @@ def main():
         "-r", "--reward", dest="rb_reward", type=float,
         default=features_defaults["rb_reward"],
         help="Reward returned by the Bolt at each event")
+    features_rb.add_argument(
+        "--new", action="store_true", help="By default, it will try to load "
+        "a RB previously saved (in the log directory of the initialization). "
+        "This option asks to create a new one instead.")
 
     args = parser.parse_args()
 

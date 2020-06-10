@@ -79,7 +79,8 @@ class AtariAgent(QAgentDef):
 
         # Define
         model = keras.Sequential([
-            keras.layers.Permute((2, 3, 1), input_shape=input_shape),  # window -> channels
+            keras.layers.Permute(
+                (2, 3, 1), input_shape=input_shape),  # window -> channels
             layers.ConvBlock(
                 filters=32, kernel_size=8, strides=4, padding="valid",
                 activation="relu"),
@@ -265,14 +266,14 @@ class RestrainedAtariAgent(AtariAgent):
 
         :return: a keras model
         """
-        
+
         # Inputs
         frames_input = keras.Input(
             shape=(self.window_length,) + self.resize_shape,
             dtype=tf.float32, name="input_frames")
         states_input = keras.Input(
             shape=[], dtype=tf.int32, name="input_states")
-        
+
         # Encoding
         x = frames_input
         x = keras.layers.Permute((2, 3, 1))(x)  # window -> channels
@@ -363,7 +364,7 @@ class RestrainedAtariAgent(AtariAgent):
                 self._frames_sender.send(self._last_frame, "repeated_last")
 
             return done
-        
+
         def process_state_batch(self, batch):
             """Process a batch of states."""
 
