@@ -180,6 +180,9 @@ def main():
     agent_play.add_argument(
         "--rand-eps", action="store_true", dest="random_epsilon",
         help="Randomness varies from 0 to --rand-test for each episode.")
+    agent_play.add_argument(
+        "--record", type=str, help="Record frames to this file. "
+        "Requires libx264-dev.")
 
     # Agent watch op
     agent_watch = agent_op.add_parser(
