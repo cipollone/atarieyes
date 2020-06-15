@@ -3,6 +3,7 @@ TODO notes
 Agent:
 	Todo next:
 	Todo later/maybe:
+		- Restrict Montezuma actions
 		- Policy random eps slope should be computed authomatically
 		- Continue training for another 1000000 frames
 
@@ -17,3 +18,5 @@ Done:
 	- DBN
 	- GA
 	- Boolean rules
+	- Boolean function array
+	- Remote RB

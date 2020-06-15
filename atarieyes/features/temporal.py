@@ -34,6 +34,7 @@ class TemporalConstraints:
         :param env_name: a gym environment name.
         :param fluents: the list of propositional atoms that will be predicted.
         :param n_functions: number of predictions to valuate in parallel.
+        :param logdir: if provided, the automaton just parsed is saved here.
         :param verbose: log the parsing step, because it may take a long time!
         """
 
